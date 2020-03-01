@@ -4,6 +4,11 @@ Project templates for stack new http://haskellstack.org
 
 <img src="logo.jpg" alt="logo"/>
 
+## Prerequisites
+
+- [Stack](http://haskellstack.org)
+- [Docker](https://www.docker.com)
+
 ## Usage
 
 ```bash
