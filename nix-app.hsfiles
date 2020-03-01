@@ -476,7 +476,7 @@ jobs:
         command: echo -e "$DOCKER_PASS" | docker login -u $DOCKER_USER --password-stdin
     - run:
         name: Push docker image
-        command: docker push "$(docker images {{organization}}{{^organization}}TODO_ADD_ORGANIZATION{{/organization}}/{{name}} --format "{{.Repository}}:{{.Tag}}")"
+        command: docker push "$(docker images {{organization}}{{^organization}}TODO_ADD_ORGANIZATION{{/organization}}/{{name}} --format "{{=<% %>=}}{{.Repository}}:{{.Tag}}<%={{ }}=%>")"
 
 workflows:
   version: 2
