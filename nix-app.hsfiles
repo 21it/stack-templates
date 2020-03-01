@@ -103,14 +103,15 @@ main = putStrLn "Test suite not yet implemented"
 
 {-# START_FILE src/Lib.hs #-}
 module Lib
-    ( someFunc
-    ) where
+  ( someFunc,
+  )
+where
 
 someFunc :: IO ()
 someFunc = putStrLn "someFunc"
 
 {-# START_FILE app/Main.hs #-}
-module Main where
+module Main (main) where
 
 import Lib
 

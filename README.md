@@ -8,5 +8,6 @@ Project templates for stack new http://haskellstack.org
 stack new hello-world \
   github:tkachuk-labs/nix-app \
   -p organization:tkachuk-labs \
-  -p env-prefix:HELLO_WORLD
+  -p env-prefix:HELLO_WORLD \
+  --resolver lts-14.27
 ```
