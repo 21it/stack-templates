@@ -239,8 +239,8 @@ export DATABASE_URL="postgresql:///postgres?host=$PGHOST"
 # app
 #
 
-export TODO_DEFINE_APP_CAP_ENV="dev";
-export TODO_DEFINE_APP_CAP_LOG_FORMAT="Bracket"; # Bracket | JSON
-export TODO_DEFINE_APP_CAP_LIBPQ_CONN_STR="postgresql://nixbld1@/{{name}}";
-export TODO_DEFINE_APP_CAP_ENDPOINT_PORT="4000";
+export {{env-prefix}}{{^env-prefix}}TODO_ADD_ENV_PREFIX{{/env-prefix}}_ENV="dev";
+export {{env-prefix}}{{^env-prefix}}TODO_ADD_ENV_PREFIX{{/env-prefix}}_LOG_FORMAT="Bracket"; # Bracket | JSON
+export {{env-prefix}}{{^env-prefix}}TODO_ADD_ENV_PREFIX{{/env-prefix}}_LIBPQ_CONN_STR="postgresql://nixbld1@/{{name}}";
+export {{env-prefix}}{{^env-prefix}}TODO_ADD_ENV_PREFIX{{/env-prefix}}_ENDPOINT_PORT="4000";
 
