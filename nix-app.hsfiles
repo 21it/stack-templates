@@ -161,3 +161,62 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 .stack-work/
 {{name}}.cabal
 *~
+pkg.nix
+postgres/
+dist*
+result
+
+{-# START_FILE default.nix #-}
+let overlays = [(import ./overlay.nix)];
+in
+{ pkgs ? import <nixpkgs-unstable> {inherit overlays;} }:
+with pkgs;
+
+/*  */
+/* TODO : minimize docker image size */
+/*  */
+
+let callPackage = lib.callPackageWith haskellPackages;
+    pkg = callPackage ./pkg.nix {inherit stdenv;};
+    systemDeps = [ protobuf makeWrapper cacert ];
+    testDeps = [ postgresql ];
+in
+
+haskell.lib.overrideCabal pkg (drv: {
+  setupHaskellDepends = if drv ? "setupHaskellDepends" then drv.setupHaskellDepends ++ systemDeps else systemDeps;
+  testSystemDepends = if drv ? "testSystemDepends" then drv.testSystemDepends ++ testDeps else testDeps;
+  isExecutable = true;
+  enableSharedExecutables = false;
+  enableLibraryProfiling = false;
+  isLibrary = false;
+  preCheck  = ''
+    source ./export-dev-envs.sh;
+    sh ./reset-dev-data.sh;
+    sh ./spawn-dev-deps.sh;
+  '';
+  doHaddock = false;
+  postFixup = "rm -rf $out/lib $out/nix-support $out/share/doc";
+  postInstall = ''
+    wrapProgram "$out/bin/{{name}}-exe" \
+      --set SYSTEM_CERTIFICATE_PATH "${cacert}/etc/ssl/certs"
+  '';
+})
+
+{-# START_FILE docker.nix #-}
+let pkg = import ./. {};
+in
+
+{ pkgs ? import <nixpkgs> {} }:
+with pkgs;
+
+dockerTools.buildImage {
+  name = "{{organization}}{{^organization}}TODO_ADD_ORGANIZATION{{/organization}}/{{name}}";
+  contents = [ pkg ];
+
+  config = {
+    Cmd = [ "${pkg}/bin/{{name}}-exe" ];
+    ExposedPorts = {
+      "80/tcp" = {};
+    };
+  };
+}
