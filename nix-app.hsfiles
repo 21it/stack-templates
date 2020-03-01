@@ -244,3 +244,171 @@ export {{env-prefix}}{{^env-prefix}}TODO_ADD_ENV_PREFIX{{/env-prefix}}_LOG_FORMA
 export {{env-prefix}}{{^env-prefix}}TODO_ADD_ENV_PREFIX{{/env-prefix}}_LIBPQ_CONN_STR="postgresql://nixbld1@/{{name}}";
 export {{env-prefix}}{{^env-prefix}}TODO_ADD_ENV_PREFIX{{/env-prefix}}_ENDPOINT_PORT="4000";
 
+{-# START_FILE hie.yaml #-}
+cradle:
+  stack:
+
+{-# START_FILE nix-shell.sh #-}
+#!/bin/sh
+
+export IP=$(ifconfig en0 | grep inet | awk '$1=="inet" {print $2}')
+echo "host is $IP"
+echo "starting nixos container..."
+# enable for GUI apps
+# xhost + $IP
+docker run -it --rm \
+  -e DISPLAY=$IP:0 \
+  -e NIXPKGS_ALLOW_BROKEN=1 \
+  -v "$(pwd):/app" \
+  -v "nix:/nix" \
+  -v "stack:/root/.stack" \
+  -v "cabal:/root/.cabal" \
+  -v "hoogle:/root/.hoogle" \
+  -w "/app" nixos/nix:2.3 sh -c "
+  nix-channel --add https://nixos.org/channels/nixos-19.09 nixpkgs &&
+  nix-channel --add https://nixos.org/channels/nixpkgs-unstable nixpkgs-unstable &&
+  nix-channel --update &&
+  nix-env -iA cachix -f https://cachix.org/api/v1/install &&
+  cachix use all-hies &&
+  nix-shell --pure
+  "
+
+{-# START_FILE overlay.nix #-}
+self: super:
+  let
+    unstable = import <nixpkgs-unstable> {};
+    callPackage = self.lib.callPackageWith self.haskellPackages;
+    dontCheck = self.haskell.lib.dontCheck;
+    doJailbreak = self.haskell.lib.doJailbreak;
+    persistent-migration = callPackage ./persistent-migration.nix {
+      stdenv = self.stdenv;
+      fetchgit = self.fetchgit;
+    };
+  in
+    {
+      haskellPackages = super.haskell.packages.ghc865.extend(
+        self': super': {
+          proto3-suite = dontCheck (doJailbreak super'.proto3-suite);
+          hspec-wai = unstable.haskellPackages.hspec-wai_0_10_1;
+          hspec-wai-json = unstable.haskellPackages.hspec-wai-json_0_10_1;
+          scotty = unstable.haskellPackages.scotty;
+          ormolu = unstable.haskellPackages.ormolu;
+          persistent-migration = dontCheck persistent-migration;
+        }
+      );
+    }
+
+{-# START_FILE persistent-migration.nix #-}
+{ mkDerivation, base, bytestring, conduit, containers, exceptions
+, fetchgit, fgl, hpack, monad-logger, mtl, persistent
+, persistent-postgresql, persistent-template, process, QuickCheck
+, resource-pool, stdenv, tasty, tasty-golden, tasty-quickcheck
+, temporary, text, time, unordered-containers, yaml
+}:
+mkDerivation {
+  pname = "persistent-migration";
+  version = "0.1.0";
+  src = fetchgit {
+    url = "https://github.com/coingaming/persistent-migration.git";
+    sha256 = "1zs4457q76xxpx1br1xjnh65xcl6bm2zkxjadi92vng7qm7p5z6n";
+    rev = "fea2e971b5102f5068021937dbf4ee3bcb42dd1e";
+    fetchSubmodules = true;
+  };
+  libraryHaskellDepends = [
+    base containers fgl mtl persistent text time unordered-containers
+  ];
+  libraryToolDepends = [ hpack ];
+  testHaskellDepends = [
+    base bytestring conduit containers exceptions monad-logger mtl
+    persistent persistent-postgresql persistent-template process
+    QuickCheck resource-pool tasty tasty-golden tasty-quickcheck
+    temporary text time yaml
+  ];
+  prePatch = "hpack";
+  homepage = "https://github.com/brandonchinn178/persistent-migration#readme";
+  description = "Manual migrations for the persistent library";
+  license = stdenv.lib.licenses.bsd3;
+}
+
+{-# START_FILE reset-dev-data.sh #-}
+#!/bin/sh
+
+echo "resetting dev data..."
+rm -rf $PGDATA
+echo "dev data has been reset!"
+
+{-# START_FILE shell.nix #-}
+let overlays = [(import ./overlay.nix)];
+in
+
+{ pkgs ? import <nixpkgs> {inherit overlays;} }:
+with pkgs;
+
+let haskell-ide = import (fetchTarball "https://github.com/tim2CF/ultimate-haskell-ide/tarball/master") {inherit pkgs;};
+in
+
+stdenv.mkDerivation {
+  name = "{{name}}-env";
+  buildInputs = [
+    /* IDE */
+    haskell-ide
+    /* Apps */
+    postgresql
+    /* Utils */
+    cacert
+  ];
+
+  TERM="xterm-256color";
+  NIX_SSL_CERT_FILE = "${cacert}/etc/ssl/certs/ca-bundle.crt";
+  shellHook = ''
+    source ./export-dev-envs.sh
+    sh ./reset-dev-data.sh
+    sh ./spawn-dev-deps.sh
+
+    export HOOGLEDB=/root/.hoogle
+    if [ "$(ls -A $HOOGLEDB)" ]; then
+      echo "hoogle database already exists..."
+    else
+      echo "building hoogle database..."
+      stack --stack-yaml=/app/stack.yaml exec hoogle generate
+    fi
+  '';
+}
+
+{-# START_FILE spawn-dev-deps.sh #-}
+#!/bin/sh
+
+set -m
+
+#
+# Postgres
+#
+
+if [[ $EUID -ne 0 ]]; then
+    alias postgres-sh="sh"
+else
+    alias postgres-sh="su -m nixbld1"
+fi
+
+if [ ! -d $PGHOST ]; then
+  echo 'initializing postgresql workspace...'
+  postgres-sh -c "mkdir -p $PGHOST"
+fi
+if [ ! -d $PGDATA ]; then
+  echo 'initializing postgresql database...'
+  postgres-sh -c 'initdb $PGDATA --auth=trust >/dev/null'
+fi
+echo "starting postgres..."
+postgres-sh -c 'pg_ctl start -l $PGLOG -o "-c listen_addresses= -c unix_socket_directories=$PGHOST"'
+
+# NOTE : some Postgres bullshit - it crashes if createdb is executed too soon
+echo "sleeping for 3s to prevent postgres/createdb race condition..."
+sleep 3;
+
+postgres-sh -c 'createdb {{name}}'
+
+#
+# done
+#
+
+echo "shell hook executed!"
