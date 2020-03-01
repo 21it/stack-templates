@@ -2,7 +2,9 @@
 
 Project templates for stack new http://haskellstack.org
 
-# usage
+<img src="logo.jpg" alt="logo"/>
+
+## Usage
 
 ```bash
 stack new hello-world \
@@ -10,4 +12,22 @@ stack new hello-world \
   -p organization:tkachuk-labs \
   -p env-prefix:HELLO_WORLD \
   --resolver lts-14.27
+
+cd ./hello-world
+
+chmod a+x ./*.sh
+
+./nix-shell.sh
+
+stack test
+
+vi .
 ```
+
+<br>
+<p align="center">
+  <tt>
+    Made with ❤️ by
+    <a href="https://tkachuklabs.com" target="_blank">tkachuk.labs</a>
+  </tt>
+</p>
