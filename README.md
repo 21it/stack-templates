@@ -6,7 +6,7 @@ Project templates for stack new http://haskellstack.org
 
 ```bash
 stack new hello-world \
-  github:tkachuk-labs/stack-templates/nix-app \
+  github:tkachuk-labs/nix-app \
   -p organization:tkachuk-labs \
   -p env-prefix:HELLO_WORLD
 ```
