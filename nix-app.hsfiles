@@ -163,12 +163,15 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 {{name}}.cabal
 *~
 pkg.nix
-postgres/
 dist*
 result
+postgres
+
+{-# START_FILE .ignore #-}
+nixpkgs
 
 {-# START_FILE default.nix #-}
-let overlays = [(import ./overlay.nix)];
+let overlays = [(import ./nix/overlay.nix)];
 in
 { pkgs ? import <nixpkgs-unstable> {inherit overlays;} }:
 with pkgs;
@@ -179,7 +182,7 @@ with pkgs;
 
 let callPackage = lib.callPackageWith haskellPackages;
     pkg = callPackage ./pkg.nix {inherit stdenv;};
-    systemDeps = [ protobuf makeWrapper cacert ];
+    systemDeps = [ makeWrapper cacert ];
     testDeps = [ postgresql ];
 in
 
@@ -190,12 +193,14 @@ haskell.lib.overrideCabal pkg (drv: {
   enableSharedExecutables = false;
   enableLibraryProfiling = false;
   isLibrary = false;
-  preCheck  = ''
-    source ./export-dev-envs.sh;
-    sh ./reset-dev-data.sh;
-    sh ./spawn-dev-deps.sh;
-  '';
   doHaddock = false;
+  preCheck  = ''
+    source ./nix/export-test-envs.sh
+    sh ./nix/spawn-test-deps.sh
+  '';
+  postCheck = ''
+    sh ./nix/shutdown-test-deps.sh
+  '';
   postFixup = "rm -rf $out/lib $out/nix-support $out/share/doc";
   postInstall = ''
     wrapProgram "$out/bin/{{name}}-exe" \
@@ -203,8 +208,8 @@ haskell.lib.overrideCabal pkg (drv: {
   '';
 })
 
-{-# START_FILE docker.nix #-}
-let pkg = import ./. {};
+{-# START_FILE ./nix/docker.nix #-}
+let pkg = import ../. {};
 in
 
 { pkgs ? import <nixpkgs> {} }:
@@ -222,7 +227,7 @@ dockerTools.buildImage {
   };
 }
 
-{-# START_FILE export-dev-envs.sh #-}
+{-# START_FILE ./nix/export-test-envs.sh #-}
 #!/bin/sh
 
 #
@@ -260,21 +265,22 @@ echo "starting nixos container..."
 docker run -it --rm \
   -e DISPLAY=$IP:0 \
   -e NIXPKGS_ALLOW_BROKEN=1 \
+  -e ROBOT_SSH_KEY="$ROBOT_SSH_KEY" \
   -v "$(pwd):/app" \
   -v "nix:/nix" \
   -v "stack:/root/.stack" \
   -v "cabal:/root/.cabal" \
   -v "hoogle:/root/.hoogle" \
   -w "/app" nixos/nix:2.3 sh -c "
-  nix-channel --add https://nixos.org/channels/nixos-19.09 nixpkgs &&
-  nix-channel --add https://nixos.org/channels/nixpkgs-unstable nixpkgs-unstable &&
-  nix-channel --update &&
-  nix-env -iA cachix -f https://cachix.org/api/v1/install &&
+  ./nix/bootstrap.sh &&
+  nix-env -iAP cachix -f https://cachix.org/api/v1/install &&
   cachix use all-hies &&
-  nix-shell --pure
+  nix-shell --pure \
+    -I ssh-config-file=$HOME/.ssh/config \
+    --argstr robotSshKey $ROBOT_SSH_KEY
   "
 
-{-# START_FILE overlay.nix #-}
+{-# START_FILE ./nix/overlay.nix #-}
 self: super:
   let
     unstable = import <nixpkgs-unstable> {};
@@ -290,8 +296,9 @@ self: super:
       haskellPackages = super.haskell.packages.ghc865.extend(
         self': super': {
           proto3-suite = dontCheck (doJailbreak super'.proto3-suite);
-          hspec-wai = unstable.haskellPackages.hspec-wai_0_10_1;
-          hspec-wai-json = unstable.haskellPackages.hspec-wai-json_0_10_1;
+          time-compat = dontCheck (doJailbreak super'.time-compat);
+          hspec-wai = unstable.haskellPackages.hspec-wai;
+          hspec-wai-json = unstable.haskellPackages.hspec-wai-json;
           scotty = unstable.haskellPackages.scotty;
           ormolu = unstable.haskellPackages.ormolu;
           persistent-migration = dontCheck persistent-migration;
@@ -299,7 +306,7 @@ self: super:
       );
     }
 
-{-# START_FILE persistent-migration.nix #-}
+{-# START_FILE ./nix/persistent-migration.nix #-}
 { mkDerivation, base, bytestring, conduit, containers, exceptions
 , fetchgit, fgl, hpack, monad-logger, mtl, persistent
 , persistent-postgresql, persistent-template, process, QuickCheck
@@ -331,18 +338,14 @@ mkDerivation {
   license = stdenv.lib.licenses.bsd3;
 }
 
-{-# START_FILE reset-dev-data.sh #-}
-#!/bin/sh
-
-echo "resetting dev data..."
-rm -rf $PGDATA
-echo "dev data has been reset!"
-
 {-# START_FILE shell.nix #-}
-let overlays = [(import ./overlay.nix)];
+let overlays = [(import ./nix/overlay.nix)];
 in
 
-{ pkgs ? import <nixpkgs> {inherit overlays;} }:
+{
+  pkgs ? import <nixpkgs> {inherit overlays;},
+  robotSshKey ? null
+}:
 with pkgs;
 
 let haskell-ide = import (fetchTarball "https://github.com/tim2CF/ultimate-haskell-ide/tarball/master") {inherit pkgs;};
@@ -356,15 +359,21 @@ stdenv.mkDerivation {
     /* Apps */
     postgresql
     /* Utils */
+    nix
+    docker
     cacert
+    openssh
+    cabal2nix
   ];
 
-  TERM="xterm-256color";
+  TERM = "xterm-256color";
+  GIT_SSL_CAINFO = "${cacert}/etc/ssl/certs/ca-bundle.crt";
   NIX_SSL_CERT_FILE = "${cacert}/etc/ssl/certs/ca-bundle.crt";
+  NIX_PATH = "/nix/var/nix/profiles/per-user/root/channels";
+  ROBOT_SSH_KEY = robotSshKey;
   shellHook = ''
-    source ./export-dev-envs.sh
-    sh ./reset-dev-data.sh
-    sh ./spawn-dev-deps.sh
+    source ./nix/export-test-envs.sh
+    sh ./nix/spawn-test-deps.sh
 
     export HOOGLEDB=/root/.hoogle
     if [ "$(ls -A $HOOGLEDB)" ]; then
@@ -376,7 +385,7 @@ stdenv.mkDerivation {
   '';
 }
 
-{-# START_FILE spawn-dev-deps.sh #-}
+{-# START_FILE ./nix/spawn-test-deps.sh #-}
 #!/bin/sh
 
 set -m
@@ -412,7 +421,31 @@ postgres-sh -c 'createdb {{name}}'
 # done
 #
 
-echo "shell hook executed!"
+echo "spawn-test-deps executed"
+
+{-# START_FILE ./nix/shutdown-test-deps.sh #-}
+#!/bin/sh
+
+set -m
+
+#
+# Postgres
+#
+
+if [[ $EUID -ne 0 ]]; then
+   alias postgres-sh="sh"
+else
+   alias postgres-sh="su -m nixbld1"
+fi
+
+echo "shutdown postgres..."
+postgres-sh -c 'pg_ctl stop -o "-c unix_socket_directories=$PGHOST"'
+
+#
+# done
+#
+
+echo "shutdown-test-deps executed"
 
 {-# START_FILE .vim/coc-settings.json #-}
 {
@@ -446,14 +479,12 @@ configure: &configure
 release: &release
   run:
     name: Create release
-    command: ./.circleci/release.sh
+    command: ./nix/release.sh
     no_output_timeout: 60m
 
 filters: &filters
   filters:
-    branches:
-      only:
-        - master
+    branches: {}
 
 version: 2
 jobs:
@@ -496,8 +527,8 @@ workflows:
           <<: *filters
           context: global
 
-{-# START_FILE .circleci/release.sh #-}
-#!/bin/sh
+{-# START_FILE ./nix/bootstrap.sh #-}
+#/bin/sh
 
 set -e
 
@@ -506,13 +537,26 @@ echo 'http2 = false' >> /etc/nix/nix.conf
 nix-channel --add https://nixos.org/channels/nixos-19.09 nixpkgs
 nix-channel --add https://nixos.org/channels/nixpkgs-unstable nixpkgs-unstable
 nix-channel --update
-nix-env -iA nixpkgs.openssh nixpkgs.git nixpkgs.docker nixpkgs.cabal2nix
-cabal2nix . > pkg.nix
-# cabal2nix https://github.com/coingaming/persistent-migration.git > persistent-migration.nix
-# cabal2nix https://github.com/coingaming/HaskellNet.git > haskell-net.nix
+nix-env -iAP nixpkgs.git nixpkgs.openssh nixpkgs.cabal2nix nixpkgs.coreutils
+
 mkdir -p $HOME/.ssh/
-echo "$ROBOT_SSH_KEY" | base64 -d > $HOME/.ssh/id_rsa.robot && chmod 600 $HOME/.ssh/id_rsa.robot && ssh-add $HOME/.ssh/id_rsa.robot
+echo "$ROBOT_SSH_KEY" | base64 -d > $HOME/.ssh/id_rsa.robot
+chmod 600 $HOME/.ssh/id_rsa.robot
+eval `ssh-agent -s`
+ssh-add $HOME/.ssh/id_rsa.robot
 echo -e "Host *\n IdentityFile $HOME/.ssh/id_rsa.robot\n IdentitiesOnly yes" > $HOME/.ssh/config
 ssh-keyscan github.com >> $HOME/.ssh/known_hosts
-# git submodule foreach git pull && git submodule update --init --recursive
-NIXPKGS_ALLOW_BROKEN=1 nix-build docker.nix
+git submodule update --init --recursive --depth 1
+
+{-# START_FILE ./nix/release.sh #-}
+#!/bin/sh
+
+set -e
+
+./nix/bootstrap.sh
+
+cabal2nix . > pkg.nix
+
+NIXPKGS_ALLOW_BROKEN=1 nix-build . \
+  -I ssh-config-file=$HOME/.ssh/config \
+  --argstr robotSshKey $ROBOT_SSH_KEY
