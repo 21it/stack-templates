@@ -21,8 +21,11 @@ stack new hello-world \
 cd ./hello-world
 
 chmod a+x ./*.sh
+chmod a+x ./nix/*.sh
 
 ./nix-shell.sh
+
+echo "system-ghc: true" >> stack.yaml
 
 stack test
 
