@@ -62,6 +62,11 @@ stack test
 vi .
 ```
 
+## Known issues
+
+- In some cases Postgres can't use local `./postgres` directory because of permission restrictions. The fix is to manually remove directory with `rm -rf ./postgres`, and rerun command which caused the issue. Nix will create directory again with proper permissions.
+- Ultimate Haskell IDE has some [known issues](https://github.com/tim2CF/ultimate-haskell-ide#known-issues) as well.
+
 <br>
 <p align="center">
   <tt>
