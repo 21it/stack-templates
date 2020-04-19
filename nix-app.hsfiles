@@ -163,56 +163,76 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 {{name}}.cabal
 *~
 pkg.nix
-dist*
-result
+nix/pkg.nix
 postgres
+postgres_data
+dist*
+postgres.log
+result
 
 {-# START_FILE .ignore #-}
-nixpkgs
+.stack-work
 
-{-# START_FILE default.nix #-}
-let overlays = [(import ./nix/overlay.nix)];
+{-# START_FILE ./nix/default.nix #-}
+{
+  pkgs ? null,
+  hexOrganization ? null, # organization account name on hex.pm
+  hexApiKey ? null,       # plain text account API key on hex.pm
+  robotSshKey ? null      # base64-encoded private id_rsa (for private git)
+}:
+let overlays = [
+      (import ./overlay.nix {inherit hexOrganization hexApiKey robotSshKey;})
+    ];
+    localPkgs = import ./nixpkgs.nix;
+    nixpkgs = if pkgs == null then import localPkgs {inherit overlays;} else pkgs;
 in
-{ pkgs ? import <nixpkgs-unstable> {inherit overlays;} }:
-with pkgs;
-
-/*  */
-/* TODO : minimize docker image size */
-/*  */
+with nixpkgs;
 
 let callPackage = lib.callPackageWith haskellPackages;
     pkg = callPackage ./pkg.nix {inherit stdenv;};
-    systemDeps = [ makeWrapper cacert ];
+    systemDeps = [ protobuf makeWrapper cacert ];
     testDeps = [ postgresql ];
 in
-
-haskell.lib.overrideCabal pkg (drv: {
-  setupHaskellDepends = if drv ? "setupHaskellDepends" then drv.setupHaskellDepends ++ systemDeps else systemDeps;
-  testSystemDepends = if drv ? "testSystemDepends" then drv.testSystemDepends ++ testDeps else testDeps;
-  isExecutable = true;
-  enableSharedExecutables = false;
-  enableLibraryProfiling = false;
-  isLibrary = false;
-  doHaddock = false;
-  preCheck  = ''
-    source ./nix/export-test-envs.sh
-    sh ./nix/spawn-test-deps.sh
-  '';
-  postCheck = ''
-    sh ./nix/shutdown-test-deps.sh
-  '';
-  postFixup = "rm -rf $out/lib $out/nix-support $out/share/doc";
-  postInstall = ''
-    wrapProgram "$out/bin/{{name}}-exe" \
-      --set SYSTEM_CERTIFICATE_PATH "${cacert}/etc/ssl/certs"
-  '';
-})
+  haskell.lib.overrideCabal pkg (drv: {
+    setupHaskellDepends =
+      if drv ? "setupHaskellDepends"
+      then drv.setupHaskellDepends ++ systemDeps
+      else systemDeps;
+    testSystemDepends =
+      if drv ? "testSystemDepends"
+      then drv.testSystemDepends ++ testDeps
+      else testDeps;
+    isExecutable = true;
+    enableSharedExecutables = false;
+    enableLibraryProfiling = false;
+    isLibrary = false;
+    doHaddock = false;
+    preCheck = ''
+      source ./nix/export-test-envs.sh;
+      sh ./nix/reset-test-data.sh;
+      sh ./nix/spawn-test-deps.sh;
+    '';
+    postCheck = ''
+      sh ./nix/shutdown-test-deps.sh
+    '';
+    postFixup = "rm -rf $out/lib $out/nix-support $out/share/doc";
+    postInstall = ''
+      wrapProgram "$out/bin/{{name}}-exe" \
+        --set SYSTEM_CERTIFICATE_PATH "${cacert}/etc/ssl/certs"
+    '';
+  })
 
 {-# START_FILE ./nix/docker.nix #-}
-let pkg = import ../. {};
+let nixpkgs = import ./nixpkgs.nix;
 in
-
-{ pkgs ? import <nixpkgs> {} }:
+{
+  pkgs ? import nixpkgs {},
+  hexOrganization ? null, # organization account name on hex.pm
+  hexApiKey ? null,       # plain text account API key on hex.pm
+  robotSshKey ? null      # base64-encoded private id_rsa (for private git)
+}:
+let pkg = import ./default.nix {inherit hexOrganization hexApiKey robotSshKey;};
+in
 with pkgs;
 
 dockerTools.buildImage {
@@ -227,70 +247,27 @@ dockerTools.buildImage {
   };
 }
 
-{-# START_FILE ./nix/export-test-envs.sh #-}
-#!/bin/sh
-
-#
-# postgres
-#
-
-export PATH=$PATH:/bin/
-export PGDATA=$PWD/postgres
-export PGHOST=/tmp/postgres
-export PGLOG=$PWD/postgres/LOG
-export PGDATABASE=postgres
-export DATABASE_URL="postgresql:///postgres?host=$PGHOST"
-
-#
-# app
-#
-
-export {{env-prefix}}{{^env-prefix}}TODO_ADD_ENV_PREFIX{{/env-prefix}}_ENV="dev";
-export {{env-prefix}}{{^env-prefix}}TODO_ADD_ENV_PREFIX{{/env-prefix}}_LOG_FORMAT="Bracket"; # Bracket | JSON
-export {{env-prefix}}{{^env-prefix}}TODO_ADD_ENV_PREFIX{{/env-prefix}}_LIBPQ_CONN_STR="postgresql://nixbld1@/{{name}}";
-export {{env-prefix}}{{^env-prefix}}TODO_ADD_ENV_PREFIX{{/env-prefix}}_ENDPOINT_PORT="4000";
-
-{-# START_FILE hie.yaml #-}
-cradle:
-  stack:
-
-{-# START_FILE nix-shell.sh #-}
-#!/bin/sh
-
-export IP=$(ifconfig en0 | grep inet | awk '$1=="inet" {print $2}')
-echo "host is $IP"
-echo "starting nixos container..."
-# enable for GUI apps
-# xhost + $IP
-docker run -it --rm \
-  -e DISPLAY=$IP:0 \
-  -e NIXPKGS_ALLOW_BROKEN=1 \
-  -e ROBOT_SSH_KEY="$ROBOT_SSH_KEY" \
-  -v "$(pwd):/app" \
-  -v "nix:/nix" \
-  -v "stack:/root/.stack" \
-  -v "cabal:/root/.cabal" \
-  -v "hoogle:/root/.hoogle" \
-  -w "/app" nixos/nix:2.3 sh -c "
-  ./nix/bootstrap.sh &&
-  nix-env -iAP cachix -f https://cachix.org/api/v1/install &&
-  cachix use all-hies &&
-  nix-shell --pure \
-    -I ssh-config-file=$HOME/.ssh/config \
-    --argstr robotSshKey $ROBOT_SSH_KEY
-  "
+{-# START_FILE ./nix/nixpkgs.nix #-}
+builtins.fetchTarball {
+  url="https://github.com/NixOS/nixpkgs/archive/19.09-beta.tar.gz";
+  sha256="0fplfm2zx4vk7gs8bdcxnvzkdmpx2w0llqwf8475z9dz9cl132rm";
+}
 
 {-# START_FILE ./nix/overlay.nix #-}
+{
+  hexOrganization,
+  hexApiKey,
+  robotSshKey
+}:
 self: super:
   let
-    unstable = import <nixpkgs-unstable> {};
     callPackage = self.lib.callPackageWith self.haskellPackages;
     dontCheck = self.haskell.lib.dontCheck;
     doJailbreak = self.haskell.lib.doJailbreak;
     persistent-migration = callPackage ./persistent-migration.nix {
-        stdenv = self.stdenv;
-        fetchgit = self.fetchgit;
-      };
+      stdenv = self.stdenv;
+      fetchgit = self.fetchgit;
+    };
     hspec-wai = callPackage
       ({ mkDerivation, base, base-compat, bytestring, case-insensitive
        , hspec, hspec-core, hspec-expectations, http-types, QuickCheck
@@ -352,7 +329,7 @@ self: super:
            http-types lifted-base network text wai
          ];
          testToolDepends = [ hspec-discover ];
-         description = "Haskell web framework, using WAI and Warp";
+         description = "Haskell web framework inspired by Ruby's Sinatra, using WAI and Warp";
          license = self.stdenv.lib.licenses.bsd3;
        }) {};
   in
@@ -360,11 +337,9 @@ self: super:
       haskellPackages = super.haskell.packages.ghc865.extend(
         self': super': {
           proto3-suite = dontCheck (doJailbreak super'.proto3-suite);
-          time-compat = dontCheck (doJailbreak super'.time-compat);
           hspec-wai = hspec-wai;
           hspec-wai-json = hspec-wai-json;
           scotty = scotty;
-          ormolu = unstable.haskellPackages.ormolu;
           persistent-migration = dontCheck persistent-migration;
         }
       );
@@ -402,17 +377,27 @@ mkDerivation {
   license = stdenv.lib.licenses.bsd3;
 }
 
-{-# START_FILE shell.nix #-}
-let overlays = [(import ./nix/overlay.nix)];
+{-# START_FILE ./nix/shell.nix #-}
+let nixpkgs = import ./nixpkgs.nix;
 in
-
 {
-  pkgs ? import <nixpkgs> {inherit overlays;},
-  robotSshKey ? null
+  pkgs ? null,
+  hexOrganization ? null, # organization account name on hex.pm
+  hexApiKey ? null,       # plain text account API key on hex.pm
+  robotSshKey ? null      # base64-encoded private id_rsa (for private git)
 }:
-with pkgs;
+let overlays = [
+      (import ./overlay.nix {inherit hexOrganization hexApiKey robotSshKey;})
+    ];
+    pkgs' = if pkgs == null
+            then import nixpkgs {inherit overlays;}
+            else pkgs;
+in
+with pkgs';
 
-let haskell-ide = import (fetchTarball "https://github.com/tim2CF/ultimate-haskell-ide/tarball/master") {inherit pkgs;};
+let haskell-ide = import (
+      fetchTarball "https://github.com/tim2CF/ultimate-haskell-ide/tarball/master"
+    ) {};
 in
 
 stdenv.mkDerivation {
@@ -423,20 +408,25 @@ stdenv.mkDerivation {
     /* Apps */
     postgresql
     /* Utils */
-    nix
-    docker
-    cacert
+    git
+    nix-prefetch-scripts
     openssh
     cabal2nix
+    protobuf
+    cacert
+    xxd
   ];
 
-  TERM = "xterm-256color";
-  GIT_SSL_CAINFO = "${cacert}/etc/ssl/certs/ca-bundle.crt";
-  NIX_SSL_CERT_FILE = "${cacert}/etc/ssl/certs/ca-bundle.crt";
-  NIX_PATH = "/nix/var/nix/profiles/per-user/root/channels";
-  ROBOT_SSH_KEY = robotSshKey;
+  TERM="xterm-256color";
+  GIT_SSL_CAINFO="${cacert}/etc/ssl/certs/ca-bundle.crt";
+  NIX_SSL_CERT_FILE="${cacert}/etc/ssl/certs/ca-bundle.crt";
+  NIX_PATH="/nix/var/nix/profiles/per-user/root/channels";
+  HEX_ORGANIZATION=hexOrganization;
+  HEX_API_KEY=hexApiKey;
+  ROBOT_SSH_KEY=robotSshKey;
   shellHook = ''
     source ./nix/export-test-envs.sh
+    sh ./nix/reset-test-data.sh
     sh ./nix/spawn-test-deps.sh
 
     export HOOGLEDB=/root/.hoogle
@@ -449,10 +439,135 @@ stdenv.mkDerivation {
   '';
 }
 
+{-# START_FILE ./nix/bootstrap.sh #-}
+#/bin/sh
+
+set -e
+
+export PATH=/nix/var/nix/profiles/default/bin:/nix/var/nix/profiles/default/sbin:$PATH
+
+# Disable HTTP2 (related to https://github.com/NixOS/nix/issues/2733)
+echo 'http2 = false' >> /etc/nix/nix.conf
+nix-channel --add https://nixos.org/channels/nixos-19.09 nixpkgs
+nix-channel --update
+nix-env -iAP nixpkgs.openssh nixpkgs.git nixpkgs.cabal2nix nixpkgs.coreutils nixpkgs.docker
+nix-env -iAP cachix -f https://cachix.org/api/v1/install
+cachix use all-hies
+
+mkdir -p /tmp/.ssh/
+mkdir -p $HOME/.ssh/
+echo "$ROBOT_SSH_KEY" | base64 -d > /tmp/.ssh/id_rsa.robot
+chmod 600 /tmp/.ssh/id_rsa.robot
+eval `ssh-agent -s`
+ssh-add /tmp/.ssh/id_rsa.robot
+echo -e "Host *\n IdentityFile /tmp/.ssh/id_rsa.robot\n IdentitiesOnly yes\n UserKnownHostsFile /tmp/.ssh/known_hosts\n StrictHostKeyChecking no" > /tmp/.ssh/config
+ssh-keyscan github.com >> /tmp/.ssh/known_hosts
+cp /tmp/.ssh/* $HOME/.ssh/
+echo -e "Host *\n IdentityFile $HOME/.ssh/id_rsa.robot\n IdentitiesOnly yes\n UserKnownHostsFile $HOME/.ssh/known_hosts\n StrictHostKeyChecking no" > $HOME/.ssh/config
+chown -R nixbld1 /tmp/.ssh/
+git submodule update --init --recursive --depth 1
+
+{-# START_FILE ./nix/export-test-envs.sh #-}
+#!/bin/sh
+
+#
+# app
+#
+
+export {{env-prefix}}{{^env-prefix}}TODO_ADD_ENV_PREFIX{{/env-prefix}}_ENV="dev";
+export {{env-prefix}}{{^env-prefix}}TODO_ADD_ENV_PREFIX{{/env-prefix}}_LOG_FORMAT="Bracket"; # Bracket | JSON
+export {{env-prefix}}{{^env-prefix}}TODO_ADD_ENV_PREFIX{{/env-prefix}}_LIBPQ_CONN_STR="postgresql://nixbld1@localhost/{{name}}";
+export {{env-prefix}}{{^env-prefix}}TODO_ADD_ENV_PREFIX{{/env-prefix}}_ENDPOINT_PORT="4000";
+
+{-# START_FILE ./nix/release.sh #-}
+#!/bin/sh
+
+set -e
+
+./nix/bootstrap.sh
+
+(cd ./nix/ && cabal2nix ./.. > ./pkg.nix)
+
+NIXPKGS_ALLOW_BROKEN=1 nix-build ./nix/docker.nix \
+  -I ssh-config-file=/tmp/.ssh/config \
+  --argstr hexOrganization tkachuk.labs \
+  --argstr hexApiKey $HEX_API_KEY \
+  --argstr robotSshKey $ROBOT_SSH_KEY \
+  --option sandbox false \
+  -v --show-trace
+
+{-# START_FILE ./nix/reset-test-data.sh #-}
+#!/bin/sh
+
+echo "resetting dev data..."
+rm -rf $PGDATA
+echo "dev data has been reset!"
+
+{-# START_FILE ./nix/shell.sh #-}
+#!/bin/sh
+
+export IP=$(ifconfig en0 | grep inet | awk '$1=="inet" {print $2}')
+echo "host is $IP"
+echo "starting nixos container..."
+# enable for GUI apps
+# xhost + $IP
+docker run -it --rm \
+  -e DISPLAY=$IP:0 \
+  -e NIXPKGS_ALLOW_BROKEN=1 \
+  -e ROBOT_SSH_KEY="$ROBOT_SSH_KEY" \
+  -v "$(pwd):/app" \
+  -v "nix:/nix" \
+  -v "stack:/root/.stack" \
+  -v "cabal:/root/.cabal" \
+  -v "hoogle:/root/.hoogle" \
+  -w "/app" nixos/nix:2.3 sh -c "
+  ./nix/bootstrap.sh &&
+  nix-shell ./nix/shell.nix --pure \
+   -I ssh-config-file=/tmp/.ssh/config \
+   --argstr hexOrganization $HEX_ORGANIZATION \
+   --argstr hexApiKey $HEX_API_KEY \
+   --argstr robotSshKey $ROBOT_SSH_KEY \
+   --option sandbox false \
+   -v --show-trace
+  "
+
+{-# START_FILE ./nix/shutdown-test-deps.sh #-}
+#!/bin/sh
+
+set -m
+
+export PATH=$PATH:/bin/
+export PGDATA=$PWD/postgres
+export PGHOST=/tmp/postgres
+export PGLOG=$PWD/postgres/LOG
+export PGDATABASE=postgres
+export DATABASE_URL="postgresql:///postgres?host=$PGHOST"
+
+#
+# Postgres
+#
+
+if [[ $EUID -ne 0 ]]; then
+    alias postgres-sh="sh"
+else
+    alias postgres-sh="su -m nixbld1"
+fi
+
+echo "shutdown postgres..."
+postgres-sh -c 'pg_ctl stop -o "-c unix_socket_directories=$PGHOST"'
+echo "shutdown hook executed"
+
 {-# START_FILE ./nix/spawn-test-deps.sh #-}
 #!/bin/sh
 
 set -m
+
+export PATH=$PATH:/bin/
+export PGDATA=$PWD/postgres
+export PGHOST=/tmp/postgres
+export PGLOG=$PWD/postgres/LOG
+export PGDATABASE=postgres
+export DATABASE_URL="postgresql:///postgres?host=$PGHOST"
 
 #
 # Postgres
@@ -470,46 +585,23 @@ if [ ! -d $PGHOST ]; then
 fi
 if [ ! -d $PGDATA ]; then
   echo 'initializing postgresql database...'
-  postgres-sh -c 'initdb $PGDATA --auth=trust >/dev/null'
+  postgres-sh -c "mkdir -p $PGDATA"
+  postgres-sh -c 'initdb $PGDATA --encoding=UTF8 --auth=trust >/dev/null'
 fi
+
 echo "starting postgres..."
-postgres-sh -c 'pg_ctl start -l $PGLOG -o "-c listen_addresses= -c unix_socket_directories=$PGHOST"'
+postgres-sh -c 'pg_ctl start -o "-c listen_addresses=localhost -c unix_socket_directories=$PGHOST"'
 
 # NOTE : some Postgres bullshit - it crashes if createdb is executed too soon
 echo "sleeping for 3s to prevent postgres/createdb race condition..."
-sleep 3;
+sleep 3
 
 postgres-sh -c 'createdb {{name}}'
-
-#
-# done
-#
-
 echo "spawn-test-deps executed"
 
-{-# START_FILE ./nix/shutdown-test-deps.sh #-}
-#!/bin/sh
-
-set -m
-
-#
-# Postgres
-#
-
-if [[ $EUID -ne 0 ]]; then
-   alias postgres-sh="sh"
-else
-   alias postgres-sh="su -m nixbld1"
-fi
-
-echo "shutdown postgres..."
-postgres-sh -c 'pg_ctl stop -o "-c unix_socket_directories=$PGHOST"'
-
-#
-# done
-#
-
-echo "shutdown-test-deps executed"
+{-# START_FILE hie.yaml #-}
+cradle:
+  stack:
 
 {-# START_FILE .vim/coc-settings.json #-}
 {
@@ -590,37 +682,3 @@ workflows:
       - release-publish:
           <<: *filters
           context: global
-
-{-# START_FILE ./nix/bootstrap.sh #-}
-#/bin/sh
-
-set -e
-
-# Disable HTTP2 (related to https://github.com/NixOS/nix/issues/2733)
-echo 'http2 = false' >> /etc/nix/nix.conf
-nix-channel --add https://nixos.org/channels/nixos-19.09 nixpkgs
-nix-channel --add https://nixos.org/channels/nixpkgs-unstable nixpkgs-unstable
-nix-channel --update
-nix-env -iAP nixpkgs.git nixpkgs.openssh nixpkgs.cabal2nix nixpkgs.coreutils
-
-mkdir -p $HOME/.ssh/
-echo "$ROBOT_SSH_KEY" | base64 -d > $HOME/.ssh/id_rsa.robot
-chmod 600 $HOME/.ssh/id_rsa.robot
-eval `ssh-agent -s`
-ssh-add $HOME/.ssh/id_rsa.robot
-echo -e "Host *\n IdentityFile $HOME/.ssh/id_rsa.robot\n IdentitiesOnly yes" > $HOME/.ssh/config
-ssh-keyscan github.com >> $HOME/.ssh/known_hosts
-git submodule update --init --recursive --depth 1
-
-{-# START_FILE ./nix/release.sh #-}
-#!/bin/sh
-
-set -e
-
-./nix/bootstrap.sh
-
-cabal2nix . > pkg.nix
-
-NIXPKGS_ALLOW_BROKEN=1 nix-build . \
-  -I ssh-config-file=$HOME/.ssh/config \
-  --argstr robotSshKey $ROBOT_SSH_KEY
