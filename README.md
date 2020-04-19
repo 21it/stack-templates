@@ -20,10 +20,11 @@ stack new hello-world \
 
 cd ./hello-world
 
-chmod a+x ./*.sh
+git init
+
 chmod a+x ./nix/*.sh
 
-./nix-shell.sh
+./nix/shell.sh
 
 echo "system-ghc: true" >> stack.yaml
 
