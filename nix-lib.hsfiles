@@ -441,6 +441,14 @@ echo "resetting dev data..."
 rm -rf $PGDATA
 echo "dev data has been reset!"
 
+{-# START_FILE ./nix/minimal.sh #-}
+#!/bin/sh
+
+docker run -it --rm \
+  -v "$(pwd):/app" \
+  -v "nix:/nix" \
+  -w "/app" nixos/nix:2.3
+
 {-# START_FILE ./nix/shell.sh #-}
 #!/bin/sh
 
