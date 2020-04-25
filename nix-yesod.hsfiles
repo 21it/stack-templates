@@ -307,6 +307,34 @@ cabal.sandbox.config
 {-# START_FILE .ignore #-}
 .stack-work
 
+{-# START_FILE docker-compose.yaml #-}
+version: "3.7"
+services:
+ {{name}}:
+   image: {{organization}}{{^organization}}TODO_ADD_ORGANIZATION{{/organization}}/{{name}}:TODO_ADD_VERSION
+   restart: always
+   ports:
+     - "4000:3000"
+   environment:
+     YESOD_PGUSER: "postgres"
+     YESOD_PGPASS: "postgres"
+     YESOD_PGHOST: "postgres"
+     YESOD_PGDATABASE: "{{name}}"
+   depends_on:
+     - "postgres"
+ postgres:
+   image: postgres:11.3-alpine
+   restart: always
+   environment:
+     POSTGRES_USER: "postgres"
+     POSTGRES_PASSWORD: "postgres"
+     POSTGRES_DB: "{{name}}"
+   healthcheck:
+     test: ["CMD", "pg_isready", "-h", "postgres", "-U", "postgres"]
+     interval: 1s
+     timeout: 10s
+     retries: 3
+
 {-# START_FILE ./nix/default.nix #-}
 {
   pkgs ? null,
@@ -349,9 +377,13 @@ in
     postCheck = ''
       sh ./nix/shutdown-test-deps.sh
     '';
-    postFixup = "rm -rf $out/lib $out/nix-support $out/share/doc";
+    postFixup = ''
+      rm -rf $out/lib $out/nix-support $out/share/doc
+      cp -R ./static $out/static
+      cp -R ./config $out/config
+    '';
     postInstall = ''
-      wrapProgram "$out/bin/{{name}}-exe" \
+      wrapProgram "$out/bin/{{name}}" \
         --set SYSTEM_CERTIFICATE_PATH "${cacert}/etc/ssl/certs"
     '';
   })
@@ -374,7 +406,7 @@ dockerTools.buildImage {
   contents = [ pkg ];
 
   config = {
-    Cmd = [ "${pkg}/bin/{{name}}-exe" ];
+    Cmd = [ "${pkg}/bin/{{name}}" ];
     ExposedPorts = {
       "80/tcp" = {};
     };
@@ -543,6 +575,7 @@ stdenv.mkDerivation {
     postgresql
     /* Utils */
     git
+    haskellPackages.yesod-bin
     nix-prefetch-scripts
     openssh
     cabal2nix
@@ -605,13 +638,20 @@ git submodule update --init --recursive --depth 1
 #!/bin/sh
 
 #
+# locale
+#
+
+export LANG="C.UTF-8"
+export LC_ALL="C.UTF-8"
+
+#
 # app
 #
 
-export {{env-prefix}}{{^env-prefix}}TODO_ADD_ENV_PREFIX{{/env-prefix}}_ENV="dev";
-export {{env-prefix}}{{^env-prefix}}TODO_ADD_ENV_PREFIX{{/env-prefix}}_LOG_FORMAT="Bracket"; # Bracket | JSON
-export {{env-prefix}}{{^env-prefix}}TODO_ADD_ENV_PREFIX{{/env-prefix}}_LIBPQ_CONN_STR="postgresql://nixbld1@localhost/{{name}}";
-export {{env-prefix}}{{^env-prefix}}TODO_ADD_ENV_PREFIX{{/env-prefix}}_ENDPOINT_PORT="4000";
+export {{env-prefix}}{{^env-prefix}}TODO_ADD_ENV_PREFIX{{/env-prefix}}_ENV="dev"
+export {{env-prefix}}{{^env-prefix}}TODO_ADD_ENV_PREFIX{{/env-prefix}}_LOG_FORMAT="Bracket" # Bracket | JSON
+export {{env-prefix}}{{^env-prefix}}TODO_ADD_ENV_PREFIX{{/env-prefix}}_LIBPQ_CONN_STR="postgresql://nixbld1@localhost/{{name}}"
+export {{env-prefix}}{{^env-prefix}}TODO_ADD_ENV_PREFIX{{/env-prefix}}_ENDPOINT_PORT="4000"
 
 {-# START_FILE ./nix/release.sh #-}
 #!/bin/sh
@@ -657,6 +697,7 @@ docker run -it --rm \
   -e DISPLAY=$IP:0 \
   -e NIXPKGS_ALLOW_BROKEN=1 \
   -e ROBOT_SSH_KEY="$ROBOT_SSH_KEY" \
+  -p 3000:3000 \
   -v "$(pwd):/app" \
   -v "nix:/nix" \
   -v "stack:/root/.stack" \
@@ -735,10 +776,12 @@ echo "starting postgres..."
 postgres-sh -c 'pg_ctl start -o "-c listen_addresses=localhost -c unix_socket_directories=$PGHOST"'
 
 # NOTE : some Postgres bullshit - it crashes if createdb is executed too soon
-echo "sleeping for 3s to prevent postgres/createdb race condition..."
-sleep 3
+echo "sleeping for 5s to prevent postgres/createdb race condition..."
+sleep 5
 
+postgres-sh -c 'createuser {{name}}'
 postgres-sh -c 'createdb {{name}}'
+postgres-sh -c 'createdb {{name}}_test'
 echo "spawn-test-deps executed"
 
 {-# START_FILE hie.yaml #-}
