@@ -868,6 +868,7 @@ workflows:
 -- If you change a template, you'll need to either exit GHCi and reload,
 -- or manually @touch@ another Haskell module.
 
+{-# OPTIONS_GHC -Wno-missing-export-lists #-}
 module DevelMain where
 
 import Prelude
@@ -1059,7 +1060,6 @@ User
     ident Text
     password Text Maybe
     UniqueUser ident
-    deriving Typeable
 Email
     email Text
     userId UserId Maybe
@@ -1348,10 +1348,13 @@ db = handler . runDB
 {-# LANGUAGE ExplicitForAll #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE InstanceSigs #-}
+{-# OPTIONS_GHC -Wno-missing-export-lists #-}
+{-# OPTIONS_GHC -Wno-redundant-constraints #-}
 
 module Foundation where
 
 import Import.NoFoundation
+import Data.Kind (Type)
 import Database.Persist.Sql (ConnectionPool, runSqlPool)
 import Text.Hamlet          (hamletFile)
 import Text.Jasmine         (minifym)
@@ -1407,7 +1410,7 @@ mkYesodData "App" $(parseRoutesFile "config/routes")
 type Form x = Html -> MForm (HandlerFor App) (FormResult x, Widget)
 
 -- | A convenient synonym for database access functions.
-type DB a = forall (m :: * -> *).
+type DB a = forall (m :: Type -> Type).
     (MonadUnliftIO m) => ReaderT SqlBackend m a
 
 -- Please see the documentation for the Yesod typeclass. There are a number
@@ -1638,6 +1641,7 @@ unsafeHandler = Unsafe.fakeHandlerGetLogger appLogger
 -- https://github.com/yesodweb/yesod/wiki/i18n-messages-in-the-scaffolding
 
 {-# START_FILE src/Handler/Comment.hs #-}
+{-# OPTIONS_GHC -Wno-missing-export-lists #-}
 module Handler.Comment where
 
 import Import
@@ -1661,6 +1665,7 @@ postCommentR = do
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE TypeFamilies #-}
+{-# OPTIONS_GHC -Wno-missing-export-lists #-}
 -- | Common handler functions.
 module Handler.Common where
 
@@ -1685,6 +1690,7 @@ getRobotsR = return $ TypedContent typePlain
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE TypeFamilies #-}
+{-# OPTIONS_GHC -Wno-missing-export-lists #-}
 module Handler.Home where
 
 import Import
@@ -1760,6 +1766,7 @@ getAllComments = selectList [] [Asc CommentId]
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE TypeFamilies #-}
+{-# OPTIONS_GHC -Wno-missing-export-lists #-}
 module Handler.Profile where
 
 import Import
@@ -1806,6 +1813,7 @@ import Yesod.Default.Config2 as Import
 {-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE UndecidableInstances #-}
+{-# OPTIONS_GHC -Wno-missing-export-lists #-}
 module Model where
 
 import ClassyPrelude.Yesod
@@ -1824,6 +1832,7 @@ share [mkPersist sqlSettings, mkMigrate "migrateAll"]
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards   #-}
 {-# LANGUAGE TemplateHaskell   #-}
+{-# OPTIONS_GHC -Wno-missing-export-lists #-}
 -- | Settings are centralized, as much as possible, into this file. This
 -- includes database connection settings, static file locations, etc.
 -- In addition, you can configure a number of different aspects of Yesod
@@ -1973,6 +1982,7 @@ combineScripts = combineScripts'
 {-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TemplateHaskell   #-}
+{-# OPTIONS_GHC -Wno-missing-export-lists #-}
 module Settings.StaticFiles where
 
 import Settings     (appStaticDir, compileTimeAppSettings)
