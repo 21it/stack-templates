@@ -1,3 +1,9 @@
+{-# START_FILE .dir-locals.el #-}
+((haskell-mode . ((haskell-indent-spaces . 4)
+                  (haskell-process-use-ghci . t)))
+ (hamlet-mode . ((hamlet/basic-offset . 4)
+                 (haskell-process-use-ghci . t))))
+
 {-# START_FILE package.yaml #-}
 name:                {{name}}
 version:             0.1.0.0
@@ -21,32 +27,95 @@ extra-source-files:
 description:         Please see the README on GitHub at <https://github.com/{{github-username}}{{^github-username}}githubuser{{/github-username}}/{{name}}#readme>
 
 dependencies:
-- base >= 4.7 && < 5
+- base >=4.9.1.0 && <5
+- yesod >=1.6 && <1.7
+- yesod-core >=1.6 && <1.7
+- yesod-auth >=1.6 && <1.7
+- yesod-static >=1.6 && <1.7
+- yesod-form >=1.6 && <1.7
+- classy-prelude >=1.5 && <1.6
+- classy-prelude-conduit >=1.5 && <1.6
+- classy-prelude-yesod >=1.5 && <1.6
+- bytestring >=0.10 && <0.11
+- text >=0.11 && <2.0
+- persistent >=2.9 && <2.11
+- persistent-postgresql >=2.9 && <2.11
+- persistent-template >=2.5 && <2.9
+- template-haskell
+- shakespeare >=2.0 && <2.1
+- hjsmin >=0.1 && <0.3
+- monad-control >=0.3 && <1.1
+- wai-extra >=3.0 && <3.1
+- yaml >=0.11 && <0.12
+- http-client-tls >=0.3 && <0.4
+- http-conduit >=2.3 && <2.4
+- directory >=1.1 && <1.4
+- warp >=3.0 && <3.4
+- data-default
+- aeson >=1.4 && <1.5
+- conduit >=1.0 && <2.0
+- monad-logger >=0.3 && <0.4
+- fast-logger >=2.2 && <3.1
+- wai-logger >=2.2 && <2.4
+- file-embed
+- safe
+- unordered-containers
+- containers
+- vector
+- time
+- case-insensitive
+- wai
+- foreign-store
 
+# The library contains all of our application code. The executable
+# defined below is just a thin wrapper.
 library:
   source-dirs: src
-  ghc-options:
-  # For details on warnings: https://downloads.haskell.org/~ghc/master/users-guide/using-warnings.html
-  # Enable all warnings with -Weverything, then disable the ones we don’t care about
-  - -Weverything
-  - -Werror
-  - -Wno-missing-exported-signatures # missing-exported-signatures turns off the more strict -Wmissing-signatures. See https://ghc.haskell.org/trac/ghc/ticket/14794#ticket
-  - -Wno-missing-import-lists # Requires explicit imports of _every_ function (e.g. ‘$’); too strict
-  - -Wno-missed-specialisations # When GHC can’t specialize a polymorphic function. No big deal and requires fixing underlying libraries to solve.
-  - -Wno-all-missed-specialisations # See missed-specialisations
-  - -Wno-unsafe # Don’t use Safe Haskell warnings
-  - -Wno-safe # Don’t use Safe Haskell warnings
-  - -Wno-missing-local-signatures # Warning for polymorphic local bindings; nothing wrong with those.
-  - -Wno-monomorphism-restriction # Don’t warn if the monomorphism restriction is used
-  - -Wno-implicit-prelude
+  # TODO : remove dependencies if not needed
   dependencies:
   - hspec
   - hspec-wai
+  when:
+  - condition: (flag(dev)) || (flag(library-only))
+    then:
+      ghc-options:
+      # For details on warnings: https://downloads.haskell.org/~ghc/master/users-guide/using-warnings.html
+      # Enable all warnings with -Weverything, then disable the ones we don’t care about
+      - -Weverything
+      - -Werror
+      - -Wno-missing-exported-signatures # missing-exported-signatures turns off the more strict -Wmissing-signatures. See https://ghc.haskell.org/trac/ghc/ticket/14794#ticket
+      - -Wno-missing-import-lists # Requires explicit imports of _every_ function (e.g. ‘$’); too strict
+      - -Wno-missed-specialisations # When GHC can’t specialize a polymorphic function. No big deal and requires fixing underlying libraries to solve.
+      - -Wno-all-missed-specialisations # See missed-specialisations
+      - -Wno-unsafe # Don’t use Safe Haskell warnings
+      - -Wno-safe # Don’t use Safe Haskell warnings
+      - -Wno-missing-local-signatures # Warning for polymorphic local bindings; nothing wrong with those.
+      - -Wno-monomorphism-restriction # Don’t warn if the monomorphism restriction is used
+      - -Wno-implicit-prelude
+      - -O0
+      cpp-options: -DDEVELOPMENT
+    else:
+      ghc-options:
+      # For details on warnings: https://downloads.haskell.org/~ghc/master/users-guide/using-warnings.html
+      # Enable all warnings with -Weverything, then disable the ones we don’t care about
+      - -Weverything
+      - -Werror
+      - -Wno-missing-exported-signatures # missing-exported-signatures turns off the more strict -Wmissing-signatures. See https://ghc.haskell.org/trac/ghc/ticket/14794#ticket
+      - -Wno-missing-import-lists # Requires explicit imports of _every_ function (e.g. ‘$’); too strict
+      - -Wno-missed-specialisations # When GHC can’t specialize a polymorphic function. No big deal and requires fixing underlying libraries to solve.
+      - -Wno-all-missed-specialisations # See missed-specialisations
+      - -Wno-unsafe # Don’t use Safe Haskell warnings
+      - -Wno-safe # Don’t use Safe Haskell warnings
+      - -Wno-missing-local-signatures # Warning for polymorphic local bindings; nothing wrong with those.
+      - -Wno-monomorphism-restriction # Don’t warn if the monomorphism restriction is used
+      - -Wno-implicit-prelude
+      - -O2
 
+# Runnable executable for our application
 executables:
-  {{name}}-exe:
-    main:                Main.hs
-    source-dirs:         app
+  {{name}}:
+    main: main.hs
+    source-dirs: app
     ghc-options:
     # For details on warnings: https://downloads.haskell.org/~ghc/master/users-guide/using-warnings.html
     # Enable all warnings with -Weverything, then disable the ones we don’t care about
@@ -66,11 +135,15 @@ executables:
     - -with-rtsopts=-N
     dependencies:
     - {{name}}
+    when:
+    - condition: flag(library-only)
+      buildable: false
 
+# Test suite
 tests:
   {{name}}-test:
-    main:                Spec.hs
-    source-dirs:         test
+    main: Spec.hs
+    source-dirs: test
     ghc-options:
     # For details on warnings: https://downloads.haskell.org/~ghc/master/users-guide/using-warnings.html
     # Enable all warnings with -Weverything, then disable the ones we don’t care about
@@ -90,36 +163,92 @@ tests:
     - -with-rtsopts=-N
     dependencies:
     - {{name}}
-    - hspec
+    - hspec >=2.0.0
     - hspec-wai
+    - yesod-test
+
+# Define flags used by "yesod devel" to make compilation faster
+flags:
+  library-only:
+    description: Build for use with "yesod devel"
+    manual: false
+    default: false
+  dev:
+    description: Turn on development settings, like auto-reload templates.
+    manual: false
+    default: false
 
 {-# START_FILE Setup.hs #-}
 import Distribution.Simple
 main = defaultMain
 
 {-# START_FILE test/Spec.hs #-}
-main :: IO ()
-main = putStrLn "Test suite not yet implemented"
+{-# OPTIONS_GHC -Wno-missing-export-lists #-}
+{-# OPTIONS_GHC -F -pgmF hspec-discover #-}
 
-{-# START_FILE src/Lib.hs #-}
-module Lib
-  ( someFunc,
-  )
-where
-
-someFunc :: IO ()
-someFunc = putStrLn "someFunc"
-
-{-# START_FILE app/Main.hs #-}
-module Main (main) where
-
-import Lib
+{-# START_FILE app/main.hs #-}
+import Prelude     (IO)
+import Application (appMain)
 
 main :: IO ()
-main = someFunc
+main = appMain
 
 {-# START_FILE README.md #-}
 # {{name}}
+## Database Setup (without Nix)
+
+After installing Postgres, run:
+
+```
+createuser {{name}} --pwprompt --superuser
+# Enter password {{name}} when prompted
+createdb {{name}}
+createdb {{name}}_test
+```
+
+## Haskell Setup (without Nix)
+
+1. If you haven't already, [install Stack](https://haskell-lang.org/get-started)
+	* On POSIX systems, this is usually `curl -sSL https://get.haskellstack.org/ | sh`
+2. Install the `yesod` command line tool: `stack install yesod-bin --install-ghc`
+3. Build libraries: `stack build`
+
+If you have trouble, refer to the [Yesod Quickstart guide](https://www.yesodweb.com/page/quickstart) for additional detail.
+
+## Development
+
+Start a development server with:
+
+```
+stack exec -- yesod devel
+```
+
+As your code changes, your site will be automatically recompiled and redeployed to localhost.
+
+## Tests
+
+```
+stack test --flag {{name}}:library-only --flag {{name}}:dev
+```
+
+(Because `yesod devel` passes the `library-only` and `dev` flags, matching those flags means you don't need to recompile between tests and development, and it disables optimization to speed up your test compile times).
+
+## Documentation
+
+* Read the [Yesod Book](https://www.yesodweb.com/book) online for free
+* Check [Stackage](http://stackage.org/) for documentation on the packages in your LTS Haskell version, or [search it using Hoogle](https://www.stackage.org/lts/hoogle?q=). Tip: Your LTS version is in your `stack.yaml` file.
+* For local documentation, use:
+	* `stack haddock --open` to generate Haddock documentation for your dependencies, and open that documentation in a browser
+	* `stack hoogle <function, module or type signature>` to generate a Hoogle database and search for your query
+* The [Yesod cookbook](https://github.com/yesodweb/yesod-cookbook) has sample code for various needs
+
+## Getting Help
+
+* Ask questions on [Stack Overflow, using the Yesod or Haskell tags](https://stackoverflow.com/questions/tagged/yesod+haskell)
+* Ask the [Yesod Google Group](https://groups.google.com/forum/#!forum/yesodweb)
+* There are several chatrooms you can ask for help:
+	* For IRC, try Freenode#yesod and Freenode#haskell
+	* [Functional Programming Slack](https://fpchat-invite.herokuapp.com/), in the #haskell, #haskell-beginners, or #yesod channels.
 
 {-# START_FILE ChangeLog.md #-}
 # Changelog for {{name}}
@@ -159,16 +288,34 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 {-# START_FILE .gitignore #-}
-.stack-work/
-{{name}}.cabal
-*~
 pkg.nix
 nix/pkg.nix
+result
 postgres
 postgres_data
-dist*
 postgres.log
-result
+dist*
+static/tmp/
+static/combined/
+config/client_session_key.aes
+*.hi
+*.o
+*.sqlite3
+*.sqlite3-shm
+*.sqlite3-wal
+.hsenv*
+cabal-dev/
+.stack-work/
+.stack-work-devel/
+yesod-devel/
+.cabal-sandbox
+cabal.sandbox.config
+.DS_Store
+*.swp
+*.keter
+*~
+\#*
+{{name}}.cabal
 
 {-# START_FILE .ignore #-}
 .stack-work
