@@ -665,6 +665,8 @@ git submodule update --init --recursive --depth 1
 {-# START_FILE ./nix/export-test-envs.sh #-}
 #!/bin/sh
 
+export PATH=$PATH:/nix/var/nix/profiles/default/bin:/nix/var/nix/profiles/default/sbin:/bin:/sbin:/usr/bin:/usr/sbin
+
 #
 # locale
 #
