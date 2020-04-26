@@ -37,6 +37,7 @@ export ROBOT_SSH_KEY="$(cat ~/.ssh/id_rsa | base64)"
 
 - `nix-app` executable template, builds to Docker image
 - `nix-lib` library template, builds to Nix/Stack package
+- `nix-yesod` yesod application template, builds to Docker image
 
 ## Usage
 
