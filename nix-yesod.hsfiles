@@ -60,7 +60,6 @@ dependencies:
 - case-insensitive
 - wai
 - foreign-store
-- persistent-migration
 - resource-pool
 
 # The library contains all of our application code. The executable

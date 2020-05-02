@@ -54,9 +54,9 @@ git init
 
 chmod a+x ./nix/*.sh
 
-./nix/shell.sh
-
 echo "system-ghc: true" >> stack.yaml
+
+./nix/shell.sh
 
 stack test
 
@@ -65,6 +65,7 @@ vi .
 
 ## Known issues
 
+- `nix-yesod` uses [persistent-migration](https://github.com/coingaming/persistent-migration) package which is not in stackage atm. Add it manually to both `package.yaml` and `stack.yaml` files.
 - In some cases Postgres can't use local `./postgres` directory because of permission restrictions. The fix is to manually remove directory with `rm -rf ./postgres`, and rerun command which caused the issue. Nix will create directory again with proper permissions.
 - Ultimate Haskell IDE has some [known issues](https://github.com/tim2CF/ultimate-haskell-ide#known-issues) as well.
 
