@@ -131,7 +131,6 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 {{name}}.cabal
 *~
 pkg.nix
-nix/pkg.nix
 postgres
 postgres_data
 dist*
@@ -382,14 +381,42 @@ stdenv.mkDerivation {
 
 set -e
 
-export PATH=/nix/var/nix/profiles/default/bin:/nix/var/nix/profiles/default/sbin:$PATH
+export PATH=/nix/var/nix/profiles/default/bin:/nix/var/nix/profiles/default/sbin:/bin:/sbin:/usr/bin:/usr/sbin:$PATH
 
 # Disable HTTP2 (related to https://github.com/NixOS/nix/issues/2733)
 echo 'http2 = false' >> /etc/nix/nix.conf
-nix-channel --add https://nixos.org/channels/nixos-19.09 nixpkgs
-nix-channel --update
-nix-env -iAP nixpkgs.openssh nixpkgs.git nixpkgs.cabal2nix nixpkgs.coreutils nixpkgs.docker
-nix-env -iAP cachix -f https://cachix.org/api/v1/install
+
+NIX_CHANNELS="$(nix-channel --list)"
+EXPECTED_NIX_CHANNELS="nixpkgs https://nixos.org/channels/nixos-19.09"
+
+if [ "$NIX_CHANNELS" != "$EXPECTED_NIX_CHANNELS" ]; then
+  echo "got '$NIX_CHANNELS' but expected '$EXPECTED_NIX_CHANNELS'"
+  nix-channel --add https://nixos.org/channels/nixos-19.09 nixpkgs
+  nix-channel --update
+else
+  echo "already updated ==> nix channels"
+fi
+
+strict_install () {
+  if [ -z "$2" ]; then
+    nix-env -iAP "nixpkgs.$1"
+  else
+    eval "$2"
+  fi
+}
+
+lazy_install () {
+  local PKG="$([ -z "$2" ] && echo "$1" || echo "$2")"
+  command -v "$1" > /dev/null && \
+    echo "already installed ==> $PKG" || \
+    strict_install "$PKG" "$3"
+}
+
+for X in "git" "cabal2nix" "docker" "coreutils"; do
+  lazy_install $X
+done
+lazy_install ssh-keyscan openssh
+lazy_install cachix cachix "nix-env -iAP cachix -f https://cachix.org/api/v1/install"
 cachix use all-hies
 
 mkdir -p /tmp/.ssh/
@@ -404,6 +431,14 @@ cp /tmp/.ssh/* $HOME/.ssh/
 echo -e "Host *\n IdentityFile $HOME/.ssh/id_rsa.robot\n IdentitiesOnly yes\n UserKnownHostsFile $HOME/.ssh/known_hosts\n StrictHostKeyChecking no" > $HOME/.ssh/config
 chown -R nixbld1 /tmp/.ssh/
 git submodule update --init --recursive --depth 1
+./nix/upgrade-pkg.sh
+
+{-# START_FILE ./nix/upgrade-pkg.sh #-}
+#!/bin/sh
+
+set -e
+
+(cd ./nix/ && cabal2nix ./.. > ./pkg.nix)
 
 {-# START_FILE ./nix/export-test-envs.sh #-}
 #!/bin/sh
@@ -423,8 +458,6 @@ export {{env-prefix}}{{^env-prefix}}TODO_ADD_ENV_PREFIX{{/env-prefix}}_ENDPOINT_
 set -e
 
 ./nix/bootstrap.sh
-
-(cd ./nix/ && cabal2nix ./.. > ./pkg.nix)
 
 NIXPKGS_ALLOW_BROKEN=1 nix-build ./nix/default.nix \
   -I ssh-config-file=/tmp/.ssh/config \
