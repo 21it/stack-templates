@@ -349,10 +349,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 {-# START_FILE .gitignore #-}
 .stack-work/
-{{name}}.cabal
 *~
-pkg.nix
-nix/pkg.nix
 postgres
 postgres_data
 dist*
@@ -360,7 +357,9 @@ postgres.log
 result
 
 {-# START_FILE .ignore #-}
-.stack-work
+.stack-work/
+static/
+
 
 {-# START_FILE ./nix/default.nix #-}
 {
@@ -369,9 +368,9 @@ result
   hexApiKey ? null,       # plain text account API key on hex.pm
   robotSshKey ? null      # base64-encoded private id_rsa (for private git)
 }:
-let overlays = [
-      (import ./overlay.nix {inherit hexOrganization hexApiKey robotSshKey;})
-    ];
+let overlays = import ./overlay.nix {
+                 inherit hexOrganization hexApiKey robotSshKey;
+               };
     localPkgs = import ./nixpkgs.nix;
     nixpkgs = if pkgs == null then import localPkgs {inherit overlays;} else pkgs;
 in
@@ -448,44 +447,47 @@ builtins.fetchTarball {
   hexApiKey,
   robotSshKey
 }:
-self: super:
-  let
-    callPackage = self.lib.callPackageWith self.haskellPackages;
-    dontCheck = self.haskell.lib.dontCheck;
-    doJailbreak = self.haskell.lib.doJailbreak;
-  in
-    {
-      haskellPackages = super.haskell.packages.ghc865.extend(
-        self': super': {
-          universum = dontCheck super'.universum;
-          persistent-migration = dontCheck (callPackage ./persistent-migration.nix {
-            stdenv = self.stdenv;
-            fetchgit = self.fetchgit;
-          });
-          hspec-wai = callPackage ./hspec-wai.nix {
-            stdenv = self.stdenv;
-          };
-          hspec-wai-json = callPackage ./hspec-wai-json.nix {};
-          scotty = callPackage ./scotty.nix {};
-          HaskellNet = callPackage ./haskell-net.nix {};
-          concur-core = callPackage ./concur-core.nix {
-            stdenv = self.stdenv;
-            fetchgit = self.fetchgit;
-          };
-          replica = callPackage ./replica.nix {
-            stdenv = self.stdenv;
-            fetchgit = self.fetchgit;
-          };
-          concur-replica = callPackage ./concur-replica.nix {
-            stdenv = self.stdenv;
-            fetchgit = self.fetchgit;
-          };
-          proto3-suite = dontCheck (doJailbreak super'.proto3-suite);
-        }
-      );
-    }
+[
+  (self: super:
+    let
+      callPackage = self.lib.callPackageWith self.haskellPackages;
+      dontCheck = self.haskell.lib.dontCheck;
+      doJailbreak = self.haskell.lib.doJailbreak;
+    in
+      {
+        haskellPackages = super.haskell.packages.ghc865.extend(
+          self': super': {
+            universum = dontCheck super'.universum;
+            persistent-migration = dontCheck (
+              callPackage ./overlay/persistent-migration.nix {
+                stdenv = self.stdenv;
+                fetchgit = self.fetchgit;
+              });
+            hspec-wai = callPackage ./overlay/hspec-wai.nix {
+              stdenv = self.stdenv;
+            };
+            hspec-wai-json = callPackage ./overlay/hspec-wai-json.nix {};
+            scotty = callPackage ./overlay/scotty.nix {};
+            HaskellNet = callPackage ./overlay/haskell-net.nix {};
+            concur-core = callPackage ./overlay/concur-core.nix {
+              stdenv = self.stdenv;
+              fetchgit = self.fetchgit;
+            };
+            replica = callPackage ./overlay/replica.nix {
+              stdenv = self.stdenv;
+              fetchgit = self.fetchgit;
+            };
+            concur-replica = callPackage ./overlay/concur-replica.nix {
+              stdenv = self.stdenv;
+              fetchgit = self.fetchgit;
+            };
+            proto3-suite = dontCheck (doJailbreak super'.proto3-suite);
+          }
+        );
+      })
+]
 
-{-# START_FILE ./nix/persistent-migration.nix #-}
+{-# START_FILE ./nix/overlay/persistent-migration.nix #-}
 { mkDerivation, base, bytestring, conduit, containers, exceptions
 , fetchgit, fgl, hpack, monad-logger, mtl, persistent
 , persistent-postgresql, persistent-template, process, QuickCheck
@@ -517,7 +519,7 @@ mkDerivation {
   license = stdenv.lib.licenses.bsd3;
 }
 
-{-# START_FILE ./nix/hspec-wai.nix #-}
+{-# START_FILE ./nix/overlay/hspec-wai.nix #-}
 { mkDerivation, base, base-compat, bytestring, case-insensitive
 , hspec, hspec-core, hspec-expectations, http-types, QuickCheck
 , stdenv, text, transformers, wai, wai-extra
@@ -541,7 +543,7 @@ mkDerivation {
   license = stdenv.lib.licenses.mit;
 }
 
-{-# START_FILE ./nix/hspec-wai-json.nix #-}
+{-# START_FILE ./nix/overlay/hspec-wai-json.nix #-}
 { mkDerivation, aeson, aeson-qq, base, bytestring, case-insensitive
 , hspec, hspec-wai, stdenv, template-haskell
 }:
@@ -559,7 +561,7 @@ mkDerivation {
   license = stdenv.lib.licenses.mit;
 }
 
-{-# START_FILE ./nix/scotty.nix #-}
+{-# START_FILE ./nix/overlay/scotty.nix #-}
 { mkDerivation, aeson, async, base, blaze-builder, bytestring
 , case-insensitive, data-default-class, directory, exceptions, fail
 , hspec, hspec-discover, hspec-wai, http-types, lifted-base
@@ -587,7 +589,7 @@ mkDerivation {
   license = stdenv.lib.licenses.bsd3;
 }
 
-{-# START_FILE ./nix/haskell-net.nix #-}
+{-# START_FILE ./nix/overlay/haskell-net.nix #-}
 { mkDerivation, array, base, base64-string, bytestring, cryptohash
 , fetchgit, mime-mail, mtl, network, network-bsd, old-time, pretty
 , stdenv, text
@@ -610,7 +612,7 @@ mkDerivation {
   license = stdenv.lib.licenses.bsd3;
 }
 
-{-# START_FILE ./nix/concur-core.nix #-}
+{-# START_FILE ./nix/overlay/concur-core.nix #-}
 { mkDerivation, base, fetchgit, free, hpack, mtl
 , natural-transformation, stdenv, stm, transformers
 }:
@@ -634,7 +636,7 @@ mkDerivation {
   license = stdenv.lib.licenses.bsd3;
 }
 
-{-# START_FILE ./nix/replica.nix #-}
+{-# START_FILE ./nix/overlay/replica.nix #-}
 { mkDerivation, aeson, base, bytestring, containers, Diff, fetchgit
 , file-embed, hpack, http-types, QuickCheck, quickcheck-instances
 , stdenv, stm, template-haskell, text, wai, wai-websockets
@@ -665,7 +667,7 @@ mkDerivation {
   license = stdenv.lib.licenses.bsd3;
 }
 
-{-# START_FILE ./nix/concur-replica.nix #-}
+{-# START_FILE ./nix/overlay/concur-replica.nix #-}
 { mkDerivation, aeson, base, bytestring, concur-core, containers
 , fetchgit, free, hpack, mtl, random, replica, stdenv, stm, text
 , transformers, wai, wai-websockets, warp, websockets
@@ -705,9 +707,9 @@ in
   hexApiKey ? null,       # plain text account API key on hex.pm
   robotSshKey ? null      # base64-encoded private id_rsa (for private git)
 }:
-let overlays = [
-      (import ./overlay.nix {inherit hexOrganization hexApiKey robotSshKey;})
-    ];
+let overlays = import ./overlay.nix {
+                 inherit hexOrganization hexApiKey robotSshKey;
+               };
     pkgs' = if pkgs == null
             then import nixpkgs {inherit overlays;}
             else pkgs;
