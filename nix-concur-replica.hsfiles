@@ -21,10 +21,58 @@ extra-source-files:
 description:         Please see the README on GitHub at <https://github.com/{{github-username}}{{^github-username}}githubuser{{/github-username}}/{{name}}#readme>
 
 dependencies:
+# foundation
 - base >= 4.7 && < 5
+- universum
+# time
+- time
+- chronos
+- unbounded-delays
+- retry
+# storage
+- persistent
+- persistent-postgresql
+- persistent-template
+- persistent-migration
+- esqueleto
+# logging
+- katip
+- monad-logger
+# web
+- wai
+- wai-middleware-static-embedded
+- warp
+- websockets
+- replica
+- concur-core
+- concur-replica
+# lens
+- lens
+- microlens
+# bytes and text
+- bytestring
+- text
+# threads
+- async
+- stm
+- resource-pool
+# th
+- template-haskell
+- file-embed
+# other
+- unliftio
+- containers
+- envparse
+- extra
 
 library:
   source-dirs: src
+  default-extensions:
+  - NoImplicitPrelude
+  - MultiParamTypeClasses
+  - LambdaCase
+  - OverloadedStrings
+  - ScopedTypeVariables
   ghc-options:
   # For details on warnings: https://downloads.haskell.org/~ghc/master/users-guide/using-warnings.html
   # Enable all warnings with -Weverything, then disable the ones we don’t care about
@@ -38,7 +86,6 @@ library:
   - -Wno-safe # Don’t use Safe Haskell warnings
   - -Wno-missing-local-signatures # Warning for polymorphic local bindings; nothing wrong with those.
   - -Wno-monomorphism-restriction # Don’t warn if the monomorphism restriction is used
-  - -Wno-implicit-prelude
   dependencies:
   - hspec
   - hspec-wai
@@ -47,6 +94,12 @@ executables:
   {{name}}-exe:
     main:                Main.hs
     source-dirs:         app
+    default-extensions:
+    - NoImplicitPrelude
+    - MultiParamTypeClasses
+    - LambdaCase
+    - OverloadedStrings
+    - ScopedTypeVariables
     ghc-options:
     # For details on warnings: https://downloads.haskell.org/~ghc/master/users-guide/using-warnings.html
     # Enable all warnings with -Weverything, then disable the ones we don’t care about
@@ -60,7 +113,6 @@ executables:
     - -Wno-safe # Don’t use Safe Haskell warnings
     - -Wno-missing-local-signatures # Warning for polymorphic local bindings; nothing wrong with those.
     - -Wno-monomorphism-restriction # Don’t warn if the monomorphism restriction is used
-    - -Wno-implicit-prelude
     - -threaded
     - -rtsopts
     - -with-rtsopts=-N
@@ -71,6 +123,12 @@ tests:
   {{name}}-test:
     main:                Spec.hs
     source-dirs:         test
+    default-extensions:
+    - NoImplicitPrelude
+    - MultiParamTypeClasses
+    - LambdaCase
+    - OverloadedStrings
+    - ScopedTypeVariables
     ghc-options:
     # For details on warnings: https://downloads.haskell.org/~ghc/master/users-guide/using-warnings.html
     # Enable all warnings with -Weverything, then disable the ones we don’t care about
@@ -84,7 +142,6 @@ tests:
     - -Wno-safe # Don’t use Safe Haskell warnings
     - -Wno-missing-local-signatures # Warning for polymorphic local bindings; nothing wrong with those.
     - -Wno-monomorphism-restriction # Don’t warn if the monomorphism restriction is used
-    - -Wno-implicit-prelude
     - -threaded
     - -rtsopts
     - -with-rtsopts=-N
@@ -93,13 +150,144 @@ tests:
     - hspec
     - hspec-wai
 
+{-# START_FILE stack.yaml #-}
+resolver: lts-14.27
+system-ghc: true
+packages:
+  - .
+extra-deps:
+  - envparse-0.4.1@sha256:989902e6368532548f61de1fa245ad2b39176cddd8743b20071af519a709ce30,2842
+  - hspec-wai-0.10.1@sha256:56dd9ec1d56f47ef1946f71f7cbf070e4c285f718cac1b158400ae5e7172ef47,2290
+  - hspec-wai-json-0.10.1@sha256:67b405c38f0a9e2771480c8d3ecd8aeb8d8776a35d3b2906cb1b76c9538617e4,1629
+  - cryptostore-0.2.1.0@sha256:9896e2984f36a1c8790f057fd5ce3da4cbcaf8aa73eb2d9277916886978c5b19,3881
+  - cryptonite-0.26@sha256:43c722f3770c31f4c5376e7aa42645b104834103312e217aa7fe79316416d6df,17352
+  - type-iso-1.0.1.0@sha256:75682a06a5af1798c6641ba3cc175685a1f699962ad22ab194a487c0d6b7da66,1892
+  - numericpeano-0.2.0.0@sha256:e3a1dc960817a81f39d276e7bfa0124e8efa1b91b5c272a70dfa16c38627f172,1406
+  - network-bitcoin-1.9.1@sha256:f950326eef853c8ce5a15a2fc65ed0291669b60b3138538629469fbeaf447d96,2420
+  - swagger2-2.3.1.1
+  - wai-middleware-static-embedded-0.1.0.0@sha256:036b7823a5e69452d1fe1e270ef3d4988063caa5bb00b6dfc356e1c21b7433e3,1581
+  - github: coingaming/persistent-migration
+    commit: d75fb27181319e3fe18ff19e45198feee6a88187
+  - github: coingaming/HaskellNet
+    commit: 73bf47e9e4ee7ec18da0da2b23a18d4e4baa8485
+  - git: https://github.com/pkamenarsky/concur.git
+    commit: dc5347b35c79654d58fa95716f425ee7248504fb
+    subdirs:
+      - concur-core
+  - git: https://github.com/pkamenarsky/replica.git
+    commit: c0046ff9b3be5e20e5306de743b83620cf59c6a9
+  - git: git@github.com:coingaming/concur-replica.git
+    commit: 7d16bcc93114c62252e3e22c208dc2a819f02435
+  - github: coingaming/persistent-migration
+    commit: d75fb27181319e3fe18ff19e45198feee6a88187
+  - github: coingaming/gRPC-haskell
+    commit: 8eaee520cd1a2ae909d2ef7ce16ce3a17be4418a
+    sha256: d9c150a855b85b5ebc1c22c2fcc0ea171ee0fdee46dd626a115f8405cb5c4502
+    size: 110250
+    subdirs:
+      - core
+  - github: coingaming/gRPC-haskell
+    commit: 8eaee520cd1a2ae909d2ef7ce16ce3a17be4418a
+    sha256: d9c150a855b85b5ebc1c22c2fcc0ea171ee0fdee46dd626a115f8405cb5c4502
+    size: 110250
+  - github: awakesecurity/proto3-suite
+    commit: ca03aa9d846d88b0762e40f9588b4927de22f798
+    sha256: be7b53ee359f0e02e8a363cafe62d5d6ae110ad211a033ef53a230f0ba2589b9
+    size: 78528
+  - github: awakesecurity/proto3-wire
+    commit: 23015cf6363d1962fde6bdff0de111f7ec59ab75
+    sha256: af5f173afe9831f1e9bd061c9e0878de8fd18987f0604885a69c4d81c5824c4e
+    size: 20147
+
 {-# START_FILE Setup.hs #-}
 import Distribution.Simple
 main = defaultMain
 
 {-# START_FILE test/Spec.hs #-}
-main :: IO ()
-main = putStrLn "Test suite not yet implemented"
+{-# OPTIONS_GHC -Wno-missing-export-lists #-}
+{-# OPTIONS_GHC -F -pgmF hspec-discover #-}
+
+{-# START_FILE src/{{name-as-module}}/Import.hs #-}
+module {{name-as-module}}.Import (module X) where
+
+import {{name-as-module}}.Import.External as X
+
+{-# START_FILE src/{{name-as-module}}/Import/External.hs #-}
+module {{name-as-module}}.Import.External (module X) where
+
+import Chronos as X (Timespan (..), stopwatch)
+import Control.Concurrent.Async as X
+  ( Async (..),
+    async,
+    cancel,
+    link,
+    poll,
+    race,
+    waitAny,
+  )
+import Control.Concurrent.Thread.Delay as X (delay)
+import Data.Bifunctor as X (bimap, first, second)
+import Data.Coerce as X (coerce)
+import Data.Either.Extra as X (fromEither)
+import Data.List as X (partition)
+import Data.Maybe as X (catMaybes)
+import Data.Monoid as X (All (..), mconcat)
+import Data.Pool as X (Pool, destroyAllResources)
+import Data.Ratio as X ((%), denominator, numerator)
+import Data.Time.Clock as X
+  ( DiffTime,
+    UTCTime,
+    addUTCTime,
+    diffTimeToPicoseconds,
+    getCurrentTime,
+    secondsToDiffTime,
+  )
+import Data.Word as X (Word64)
+import Database.Esqueleto as X
+  ( Entity (..),
+    PersistField,
+    PersistFieldSql,
+    PersistValue (..),
+    RawSql (..),
+    SqlBackend,
+    SqlPersistT,
+    getBy,
+    insertBy,
+    putMany,
+    rawExecute,
+    rawSql,
+    runMigration,
+    runSqlPool,
+  )
+import Database.Persist as X (selectList)
+import Database.Persist.Postgresql as X (ConnectionString, createPostgresqlPool)
+import Database.Persist.TH as X (derivePersistField)
+import GHC.Generics as X (Generic)
+import Katip as X
+  ( ColorStrategy (..),
+    Environment (..),
+    Katip (..),
+    KatipContext (..),
+    KatipContextT,
+    LogContexts,
+    LogEnv,
+    Namespace,
+    Severity (..),
+    Verbosity (..),
+    bracketFormat,
+    closeScribes,
+    defaultScribeSettings,
+    initLogEnv,
+    jsonFormat,
+    logStr,
+    logTM,
+    mkHandleScribeWithFormatter,
+    permitItem,
+    registerScribe,
+    runKatipContextT,
+  )
+import Universum as X hiding ((^.), on, set)
+import UnliftIO as X (MonadUnliftIO (..), UnliftIO (..), withRunInIO)
 
 {-# START_FILE src/Lib.hs #-}
 module Lib
@@ -107,12 +295,15 @@ module Lib
   )
 where
 
+import {{name-as-module}}.Import
+
 someFunc :: IO ()
-someFunc = putStrLn "someFunc"
+someFunc = putStrLn ("someFunc" :: Text)
 
 {-# START_FILE app/Main.hs #-}
 module Main (main) where
 
+import {{name-as-module}}.Import
 import Lib
 
 main :: IO ()
