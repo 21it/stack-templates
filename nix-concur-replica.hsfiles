@@ -346,8 +346,8 @@ fl = Map.fromList
 middleware :: Middleware
 middleware =
   S.static
-    [ ("app.css", $(FE.embedFile "./static/css/app.css")),
-      ("bootstrap.css", $(FE.embedFile "./static/css/bootstrap.css"))
+    [ ("bootstrap.css", $(FE.embedFile "./static/css/bootstrap.css")),
+      ("app.css", $(FE.embedFile "./static/css/app.css"))
     ]
 
 {-# START_FILE src/Lib.hs #-}
