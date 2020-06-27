@@ -166,35 +166,33 @@ extra-deps:
   - network-bitcoin-1.9.1@sha256:f950326eef853c8ce5a15a2fc65ed0291669b60b3138538629469fbeaf447d96,2420
   - swagger2-2.3.1.1
   - wai-middleware-static-embedded-0.1.0.0@sha256:036b7823a5e69452d1fe1e270ef3d4988063caa5bb00b6dfc356e1c21b7433e3,1581
-  - github: coingaming/persistent-migration
+  - github: tkachuk-labs/persistent-migration
     commit: d75fb27181319e3fe18ff19e45198feee6a88187
-  - github: coingaming/HaskellNet
+  - github: tkachuk-labs/HaskellNet
     commit: 73bf47e9e4ee7ec18da0da2b23a18d4e4baa8485
-  - git: https://github.com/pkamenarsky/concur.git
+  - github: tkachuk-labs/concur
     commit: dc5347b35c79654d58fa95716f425ee7248504fb
     subdirs:
       - concur-core
-  - git: https://github.com/pkamenarsky/replica.git
+  - github: tkachuk-labs/replica
     commit: c0046ff9b3be5e20e5306de743b83620cf59c6a9
-  - git: git@github.com:coingaming/concur-replica.git
+  - github: tkachuk-labs/concur-replica
     commit: 7d16bcc93114c62252e3e22c208dc2a819f02435
-  - github: coingaming/persistent-migration
-    commit: d75fb27181319e3fe18ff19e45198feee6a88187
-  - github: coingaming/gRPC-haskell
+  - github: tkachuk-labs/gRPC-haskell
     commit: 8eaee520cd1a2ae909d2ef7ce16ce3a17be4418a
     sha256: d9c150a855b85b5ebc1c22c2fcc0ea171ee0fdee46dd626a115f8405cb5c4502
     size: 110250
     subdirs:
       - core
-  - github: coingaming/gRPC-haskell
+  - github: tkachuk-labs/gRPC-haskell
     commit: 8eaee520cd1a2ae909d2ef7ce16ce3a17be4418a
     sha256: d9c150a855b85b5ebc1c22c2fcc0ea171ee0fdee46dd626a115f8405cb5c4502
     size: 110250
-  - github: awakesecurity/proto3-suite
+  - github: tkachuk-labs/proto3-suite
     commit: ca03aa9d846d88b0762e40f9588b4927de22f798
     sha256: be7b53ee359f0e02e8a363cafe62d5d6ae110ad211a033ef53a230f0ba2589b9
     size: 78528
-  - github: awakesecurity/proto3-wire
+  - github: tkachuk-labs/proto3-wire
     commit: 23015cf6363d1962fde6bdff0de111f7ec59ab75
     sha256: af5f173afe9831f1e9bd061c9e0878de8fd18987f0604885a69c4d81c5824c4e
     size: 20147
@@ -455,83 +453,34 @@ self: super:
     callPackage = self.lib.callPackageWith self.haskellPackages;
     dontCheck = self.haskell.lib.dontCheck;
     doJailbreak = self.haskell.lib.doJailbreak;
-    persistent-migration = callPackage ./persistent-migration.nix {
-      stdenv = self.stdenv;
-      fetchgit = self.fetchgit;
-    };
-    hspec-wai = callPackage
-      ({ mkDerivation, base, base-compat, bytestring, case-insensitive
-       , hspec, hspec-core, hspec-expectations, http-types, QuickCheck
-       , text, transformers, wai, wai-extra
-       }:
-       mkDerivation {
-         pname = "hspec-wai";
-         version = "0.10.1";
-         sha256 = "05jv0cz8r8bf63ma5byjb2gkj9vwgnls4n9mks99qc525n055ckz";
-         libraryHaskellDepends = [
-           base base-compat bytestring case-insensitive hspec-core
-           hspec-expectations http-types QuickCheck text transformers wai
-           wai-extra
-         ];
-         testHaskellDepends = [
-           base base-compat bytestring case-insensitive hspec hspec-core
-           hspec-expectations http-types QuickCheck text transformers wai
-           wai-extra
-         ];
-         description = "Experimental Hspec support for testing WAI applications";
-         license = self.stdenv.lib.licenses.mit;
-       }) {};
-    hspec-wai-json = callPackage
-      ({ mkDerivation, aeson, aeson-qq, base, bytestring
-       , case-insensitive, hspec, hspec-wai, template-haskell
-       }:
-       mkDerivation {
-         pname = "hspec-wai-json";
-         version = "0.10.1";
-         sha256 = "04mpqij446ki5l6xwi3bjmlf3ggjia2nzv8j62mdy6ick96dqwk6";
-         libraryHaskellDepends = [
-           aeson aeson-qq base bytestring case-insensitive hspec-wai
-           template-haskell
-         ];
-         testHaskellDepends = [ base hspec hspec-wai ];
-         description = "Testing JSON APIs with hspec-wai";
-         license = self.stdenv.lib.licenses.mit;
-       }) {};
-    scotty = callPackage
-      ({ mkDerivation, aeson, async, base, blaze-builder, bytestring
-       , case-insensitive, data-default-class, directory, exceptions, fail
-       , hspec, hspec-discover, hspec-wai, http-types, lifted-base
-       , monad-control, mtl, nats, network, regex-compat, text
-       , transformers, transformers-base, transformers-compat, wai
-       , wai-extra, warp
-       }:
-       mkDerivation {
-         pname = "scotty";
-         version = "0.11.5";
-         sha256 = "1pyj7j3zk80lv1c62ccna7nrsql5wf7pi5jscmypr2zd5xgfffvg";
-         libraryHaskellDepends = [
-           aeson base blaze-builder bytestring case-insensitive
-           data-default-class exceptions fail http-types monad-control mtl
-           nats network regex-compat text transformers transformers-base
-           transformers-compat wai wai-extra warp
-         ];
-         testHaskellDepends = [
-           async base bytestring data-default-class directory hspec hspec-wai
-           http-types lifted-base network text wai
-         ];
-         testToolDepends = [ hspec-discover ];
-         description = "Haskell web framework inspired by Ruby's Sinatra, using WAI and Warp";
-         license = self.stdenv.lib.licenses.bsd3;
-       }) {};
   in
     {
       haskellPackages = super.haskell.packages.ghc865.extend(
         self': super': {
+          universum = dontCheck super'.universum;
+          persistent-migration = dontCheck (callPackage ./persistent-migration.nix {
+            stdenv = self.stdenv;
+            fetchgit = self.fetchgit;
+          });
+          hspec-wai = callPackage ./hspec-wai.nix {
+            stdenv = self.stdenv;
+          };
+          hspec-wai-json = callPackage ./hspec-wai-json.nix {};
+          scotty = callPackage ./scotty.nix {};
+          HaskellNet = callPackage ./haskell-net.nix {};
+          concur-core = callPackage ./concur-core.nix {
+            stdenv = self.stdenv;
+            fetchgit = self.fetchgit;
+          };
+          replica = callPackage ./replica.nix {
+            stdenv = self.stdenv;
+            fetchgit = self.fetchgit;
+          };
+          concur-replica = callPackage ./concur-replica.nix {
+            stdenv = self.stdenv;
+            fetchgit = self.fetchgit;
+          };
           proto3-suite = dontCheck (doJailbreak super'.proto3-suite);
-          hspec-wai = hspec-wai;
-          hspec-wai-json = hspec-wai-json;
-          scotty = scotty;
-          persistent-migration = dontCheck persistent-migration;
         }
       );
     }
@@ -547,9 +496,9 @@ mkDerivation {
   pname = "persistent-migration";
   version = "0.1.0";
   src = fetchgit {
-    url = "https://github.com/coingaming/persistent-migration.git";
-    sha256 = "1zs4457q76xxpx1br1xjnh65xcl6bm2zkxjadi92vng7qm7p5z6n";
-    rev = "fea2e971b5102f5068021937dbf4ee3bcb42dd1e";
+    url = "https://github.com/tkachuk-labs/persistent-migration";
+    sha256 = "0sbq8ks81x42ih5a66g1fm0gwgmpmhwnyq9v13sqiaiwv8fnrkid";
+    rev = "d75fb27181319e3fe18ff19e45198feee6a88187";
     fetchSubmodules = true;
   };
   libraryHaskellDepends = [
@@ -565,6 +514,185 @@ mkDerivation {
   prePatch = "hpack";
   homepage = "https://github.com/brandonchinn178/persistent-migration#readme";
   description = "Manual migrations for the persistent library";
+  license = stdenv.lib.licenses.bsd3;
+}
+
+{-# START_FILE ./nix/hspec-wai.nix #-}
+{ mkDerivation, base, base-compat, bytestring, case-insensitive
+, hspec, hspec-core, hspec-expectations, http-types, QuickCheck
+, stdenv, text, transformers, wai, wai-extra
+}:
+mkDerivation {
+  pname = "hspec-wai";
+  version = "0.10.1";
+  sha256 = "7fb252802da2309c929e3559a2a97d7c27399f58d2afa2ea306ea18c3e035b16";
+  libraryHaskellDepends = [
+    base base-compat bytestring case-insensitive hspec-core
+    hspec-expectations http-types QuickCheck text transformers wai
+    wai-extra
+  ];
+  testHaskellDepends = [
+    base base-compat bytestring case-insensitive hspec hspec-core
+    hspec-expectations http-types QuickCheck text transformers wai
+    wai-extra
+  ];
+  homepage = "https://github.com/hspec/hspec-wai#readme";
+  description = "Experimental Hspec support for testing WAI applications";
+  license = stdenv.lib.licenses.mit;
+}
+
+{-# START_FILE ./nix/hspec-wai-json.nix #-}
+{ mkDerivation, aeson, aeson-qq, base, bytestring, case-insensitive
+, hspec, hspec-wai, stdenv, template-haskell
+}:
+mkDerivation {
+  pname = "hspec-wai-json";
+  version = "0.10.1";
+  sha256 = "6672dc4c9a2c1adfaa3012ed6f858af2bde168956b44de0d2d711a4264c4b712";
+  libraryHaskellDepends = [
+    aeson aeson-qq base bytestring case-insensitive hspec-wai
+    template-haskell
+  ];
+  testHaskellDepends = [ base hspec hspec-wai ];
+  homepage = "https://github.com/hspec/hspec-wai#readme";
+  description = "Testing JSON APIs with hspec-wai";
+  license = stdenv.lib.licenses.mit;
+}
+
+{-# START_FILE ./nix/scotty.nix #-}
+{ mkDerivation, aeson, async, base, blaze-builder, bytestring
+, case-insensitive, data-default-class, directory, exceptions, fail
+, hspec, hspec-discover, hspec-wai, http-types, lifted-base
+, monad-control, mtl, nats, network, regex-compat, stdenv, text
+, transformers, transformers-base, transformers-compat, wai
+, wai-extra, warp
+}:
+mkDerivation {
+  pname = "scotty";
+  version = "0.11.5";
+  sha256 = "6f3be75e2fed8b7c7d655a96788fe385629ded5196316158d814a0f9873cd2df";
+  libraryHaskellDepends = [
+    aeson base blaze-builder bytestring case-insensitive
+    data-default-class exceptions fail http-types monad-control mtl
+    nats network regex-compat text transformers transformers-base
+    transformers-compat wai wai-extra warp
+  ];
+  testHaskellDepends = [
+    async base bytestring data-default-class directory hspec hspec-wai
+    http-types lifted-base network text wai
+  ];
+  testToolDepends = [ hspec-discover ];
+  homepage = "https://github.com/scotty-web/scotty";
+  description = "Haskell web framework inspired by Ruby's Sinatra, using WAI and Warp";
+  license = stdenv.lib.licenses.bsd3;
+}
+
+{-# START_FILE ./nix/haskell-net.nix #-}
+{ mkDerivation, array, base, base64-string, bytestring, cryptohash
+, fetchgit, mime-mail, mtl, network, network-bsd, old-time, pretty
+, stdenv, text
+}:
+mkDerivation {
+  pname = "HaskellNet";
+  version = "0.5.1";
+  src = fetchgit {
+    url = "https://github.com/tkachuk-labs/HaskellNet";
+    sha256 = "1g8082bjqbfmkic34q41727h13mjpkg9gzg33lrp7xy1q43flrqh";
+    rev = "73bf47e9e4ee7ec18da0da2b23a18d4e4baa8485";
+    fetchSubmodules = true;
+  };
+  libraryHaskellDepends = [
+    array base base64-string bytestring cryptohash mime-mail mtl
+    network network-bsd old-time pretty text
+  ];
+  homepage = "https://github.com/jtdaugherty/HaskellNet";
+  description = "Client support for POP3, SMTP, and IMAP";
+  license = stdenv.lib.licenses.bsd3;
+}
+
+{-# START_FILE ./nix/concur-core.nix #-}
+{ mkDerivation, base, fetchgit, free, hpack, mtl
+, natural-transformation, stdenv, stm, transformers
+}:
+mkDerivation {
+  pname = "concur-core";
+  version = "0.1.0.0";
+  src = fetchgit {
+    url = "https://github.com/tkachuk-labs/concur";
+    sha256 = "1gdp8n8p11gyyna8lazcljijfkl11sxmbwnh3kgg5j9bcxw2cb1f";
+    rev = "dc5347b35c79654d58fa95716f425ee7248504fb";
+    fetchSubmodules = true;
+  };
+  postUnpack = "sourceRoot+=/concur-core; echo source root reset to $sourceRoot";
+  libraryHaskellDepends = [
+    base free mtl natural-transformation stm transformers
+  ];
+  libraryToolDepends = [ hpack ];
+  prePatch = "hpack";
+  homepage = "https://github.com/ajnsit/concur#readme";
+  description = "A UI framework for Haskell. Core framework.";
+  license = stdenv.lib.licenses.bsd3;
+}
+
+{-# START_FILE ./nix/replica.nix #-}
+{ mkDerivation, aeson, base, bytestring, containers, Diff, fetchgit
+, file-embed, hpack, http-types, QuickCheck, quickcheck-instances
+, stdenv, stm, template-haskell, text, wai, wai-websockets
+, websockets
+}:
+mkDerivation {
+  pname = "replica";
+  version = "0.1.0.0";
+  src = fetchgit {
+    url = "https://github.com/tkachuk-labs/replica";
+    sha256 = "0yfcgbqfmgw8ax8lf0lc3p9gvgqshakjzmw20fyvq0dp5wf5a6aa";
+    rev = "c0046ff9b3be5e20e5306de743b83620cf59c6a9";
+    fetchSubmodules = true;
+  };
+  libraryHaskellDepends = [
+    aeson base bytestring containers Diff file-embed http-types stm
+    template-haskell text wai wai-websockets websockets
+  ];
+  libraryToolDepends = [ hpack ];
+  testHaskellDepends = [
+    aeson base bytestring containers Diff file-embed http-types
+    QuickCheck quickcheck-instances stm template-haskell text wai
+    wai-websockets websockets
+  ];
+  prePatch = "hpack";
+  homepage = "https://github.com/https://github.com/pkamenarsky/replica#readme";
+  description = "Remote virtual DOM library";
+  license = stdenv.lib.licenses.bsd3;
+}
+
+{-# START_FILE ./nix/concur-replica.nix #-}
+{ mkDerivation, aeson, base, bytestring, concur-core, containers
+, fetchgit, free, hpack, mtl, random, replica, stdenv, stm, text
+, transformers, wai, wai-websockets, warp, websockets
+}:
+mkDerivation {
+  pname = "concur-replica";
+  version = "0.1.0.0";
+  src = fetchgit {
+    url = "https://github.com/tkachuk-labs/concur-replica";
+    sha256 = "1p156cx04sz0i0myv3d0kjjcp5y3s3c341jwsjdcxw65c1zzpz0v";
+    rev = "7d16bcc93114c62252e3e22c208dc2a819f02435";
+    fetchSubmodules = true;
+  };
+  isLibrary = true;
+  isExecutable = true;
+  libraryHaskellDepends = [
+    aeson base bytestring concur-core containers free replica stm text
+    transformers wai wai-websockets warp websockets
+  ];
+  libraryToolDepends = [ hpack ];
+  executableHaskellDepends = [
+    aeson base bytestring concur-core containers free mtl random
+    replica stm text transformers wai wai-websockets warp websockets
+  ];
+  prePatch = "hpack";
+  homepage = "https://github.com/pkamenarsky/concur-replica#readme";
+  description = "Replica backend for Concur";
   license = stdenv.lib.licenses.bsd3;
 }
 
