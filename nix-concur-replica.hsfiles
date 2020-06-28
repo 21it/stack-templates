@@ -168,16 +168,26 @@ extra-deps:
   - wai-middleware-static-embedded-0.1.0.0@sha256:036b7823a5e69452d1fe1e270ef3d4988063caa5bb00b6dfc356e1c21b7433e3,1581
   - github: tkachuk-labs/persistent-migration
     commit: d75fb27181319e3fe18ff19e45198feee6a88187
+    sha256: 9fcae8fbae3bd004bde3dee64f394083b21fcc6c3246752d23b2c050406a33a8
+    size: 24681
   - github: tkachuk-labs/HaskellNet
     commit: 73bf47e9e4ee7ec18da0da2b23a18d4e4baa8485
+    sha256: d861bb9123051e90b00545a35f93aebc852370cbcc759b4efb4bc4dd75210f35
+    size: 55457
   - github: tkachuk-labs/concur
     commit: dc5347b35c79654d58fa95716f425ee7248504fb
+    sha256: 0253f7cc909e8620a1ca9f45a553dfb77b502dbdc77cbe0f0e92e63c4ff5f81b
+    size: 6137383
     subdirs:
       - concur-core
   - github: tkachuk-labs/replica
     commit: c0046ff9b3be5e20e5306de743b83620cf59c6a9
+    sha256: d7d043b603be23acbfa04fbf198dc136909e23f8aa502aafa05dcc5b9e25daf5
+    size: 195022
   - github: tkachuk-labs/concur-replica
     commit: 7d16bcc93114c62252e3e22c208dc2a819f02435
+    sha256: 2a808d1214b48eb8fb8f98740b0b37022c26e52e8cbf4d201f19866bed2519bd
+    size: 25421
   - github: tkachuk-labs/gRPC-haskell
     commit: 8eaee520cd1a2ae909d2ef7ce16ce3a17be4418a
     sha256: d9c150a855b85b5ebc1c22c2fcc0ea171ee0fdee46dd626a115f8405cb5c4502
