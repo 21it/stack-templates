@@ -205,9 +205,24 @@ main = defaultMain
 {-# OPTIONS_GHC -Wno-missing-export-lists #-}
 {-# OPTIONS_GHC -F -pgmF hspec-discover #-}
 
+{-# START_FILE src/{{name-as-module}}/Class.hs #-}
+module {{name-as-module}}.Class
+  ( EnvM (..),
+  )
+where
+
+import {{name-as-module}}.Data.Env (Env (..))
+import {{name-as-module}}.Import.External
+
+class MonadIO m => EnvM m where
+  getEnv :: m Env
+
 {-# START_FILE src/{{name-as-module}}/Import.hs #-}
 module {{name-as-module}}.Import (module X) where
 
+import {{name-as-module}}.Class as X
+import {{name-as-module}}.Data.Env as X
+import {{name-as-module}}.Data.Type as X
 import {{name-as-module}}.Import.External as X
 
 {-# START_FILE src/{{name-as-module}}/Import/External.hs #-}
@@ -287,6 +302,122 @@ import Katip as X
   )
 import Universum as X hiding ((^.), on, set, atomically)
 import UnliftIO as X (MonadUnliftIO (..), UnliftIO (..), withRunInIO)
+
+{-# START_FILE src/{{name-as-module}}/Data/Type.hs #-}
+module {{name-as-module}}.Data.Type (LogFormat(..)) where
+
+import {{name-as-module}}.Import.External
+
+data LogFormat
+  = Bracket
+  | JSON
+  deriving (Read)
+
+{-# START_FILE src/{{name-as-module}}/Data/Env.hs #-}
+{-# LANGUAGE BangPatterns #-}
+
+module {{name-as-module}}.Data.Env
+  ( Env (..),
+    RawConfig (..),
+    rawConfig,
+    newEnv
+  )
+where
+
+import {{name-as-module}}.Data.Type
+import {{name-as-module}}.Import.External
+import Env ((<=<), auto, header, help, keep, nonempty, parse, str, var)
+
+data Env
+  = Env
+      { -- general
+        envEndpointPort :: Int,
+        -- logging
+        envKatipNS :: Namespace,
+        envKatipCTX :: LogContexts,
+        envKatipLE :: LogEnv
+      }
+
+data RawConfig
+  = RawConfig
+      { -- general
+        rawConfigEndpointPort :: Int,
+        -- katip
+        rawConfigLogEnv :: Text,
+        rawConfigLogFormat :: LogFormat,
+        rawConfigLogVerbosity :: Verbosity
+      }
+
+rawConfig :: IO RawConfig
+rawConfig =
+  parse (header "{{name-as-module}} config") $
+    RawConfig
+      <$> var (auto <=< nonempty) "{{env-prefix}}{{^env-prefix}}TODO_ADD_ENV_PREFIX{{/env-prefix}}_ENDPOINT_PORT" op
+      <*> var (str <=< nonempty) "{{env-prefix}}{{^env-prefix}}TODO_ADD_ENV_PREFIX{{/env-prefix}}_LOG_ENV" op
+      <*> var (auto <=< nonempty) "{{env-prefix}}{{^env-prefix}}TODO_ADD_ENV_PREFIX{{/env-prefix}}_LOG_FORMAT" op
+      <*> var (auto <=< nonempty) "{{env-prefix}}{{^env-prefix}}TODO_ADD_ENV_PREFIX{{/env-prefix}}_LOG_VERBOSITY" op
+    where
+      op = keep <> help ""
+
+newEnv :: RawConfig -> KatipContextT IO Env
+newEnv !rc = do
+  le <- getLogEnv
+  ctx <- getKatipContext
+  ns <- getKatipNamespace
+  return $
+    Env
+      { -- general
+        envEndpointPort = rawConfigEndpointPort rc,
+        -- logging
+        envKatipLE = le,
+        envKatipCTX = ctx,
+        envKatipNS = ns
+      }
+
+{-# START_FILE src/{{name-as-module}}/Data/AppM.hs #-}
+{-# LANGUAGE DeriveFunctor #-}
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE GeneralisedNewtypeDeriving #-}
+{-# LANGUAGE TypeFamilies #-}
+
+module {{name-as-module}}.Data.AppM
+  ( runApp,
+    EnvM (..),
+  )
+where
+
+import {{name-as-module}}.Import
+
+newtype AppM m a
+  = AppM
+      { unAppM :: ReaderT Env m a
+      }
+  deriving (Functor, Applicative, Monad, MonadIO, MonadReader Env)
+
+runApp :: Env -> AppM m a -> m a
+runApp env app = runReaderT (unAppM app) env
+
+instance (MonadUnliftIO m) => MonadUnliftIO (AppM m) where
+  askUnliftIO =
+    AppM (fmap (\(UnliftIO run) -> UnliftIO (run . unAppM)) askUnliftIO)
+  withRunInIO go = AppM (withRunInIO (\k -> go (k . unAppM)))
+
+instance (MonadIO m) => Katip (AppM m) where
+  getLogEnv = asks envKatipLE
+  localLogEnv f (AppM m) =
+    AppM (local (\s -> s {envKatipLE = f (envKatipLE s)}) m)
+
+instance (MonadIO m) => KatipContext (AppM m) where
+  getKatipContext = asks envKatipCTX
+  localKatipContext f (AppM m) =
+    AppM (local (\s -> s {envKatipCTX = f (envKatipCTX s)}) m)
+  getKatipNamespace = asks envKatipNS
+  localKatipNamespace f (AppM m) =
+    AppM (local (\s -> s {envKatipNS = f (envKatipNS s)}) m)
+
+instance (MonadIO m) => EnvM (AppM m) where
+  getEnv = ask
 
 {-# START_FILE src/{{name-as-module}}/Wai/Static.hs #-}
 {-# LANGUAGE TemplateHaskell #-}
@@ -894,10 +1025,10 @@ set -e
 # app
 #
 
-export {{env-prefix}}{{^env-prefix}}TODO_ADD_ENV_PREFIX{{/env-prefix}}_ENV="dev";
-export {{env-prefix}}{{^env-prefix}}TODO_ADD_ENV_PREFIX{{/env-prefix}}_LOG_FORMAT="Bracket"; # Bracket | JSON
-export {{env-prefix}}{{^env-prefix}}TODO_ADD_ENV_PREFIX{{/env-prefix}}_LIBPQ_CONN_STR="postgresql://nixbld1@localhost/{{name}}";
-export {{env-prefix}}{{^env-prefix}}TODO_ADD_ENV_PREFIX{{/env-prefix}}_ENDPOINT_PORT="4000";
+export {{env-prefix}}{{^env-prefix}}TODO_ADD_ENV_PREFIX{{/env-prefix}}_LOG_ENV="dev"
+export {{env-prefix}}{{^env-prefix}}TODO_ADD_ENV_PREFIX{{/env-prefix}}_LOG_FORMAT="Bracket" # Bracket | JSON
+export {{env-prefix}}{{^env-prefix}}TODO_ADD_ENV_PREFIX{{/env-prefix}}_LIBPQ_CONN_STR="postgresql://nixbld1@localhost/{{name}}"
+export {{env-prefix}}{{^env-prefix}}TODO_ADD_ENV_PREFIX{{/env-prefix}}_ENDPOINT_PORT="3000"
 
 {-# START_FILE ./nix/release.sh #-}
 #!/bin/sh
@@ -943,6 +1074,7 @@ docker run -it --rm \
   -e DISPLAY=$IP:0 \
   -e NIXPKGS_ALLOW_BROKEN=1 \
   -e ROBOT_SSH_KEY="$ROBOT_SSH_KEY" \
+  -p 3000:3000 \
   -v "$(pwd):/app" \
   -v "nix:/nix" \
   -v "nix-19.09-root:/root" \
