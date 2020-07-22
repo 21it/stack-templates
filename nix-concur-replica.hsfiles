@@ -443,7 +443,7 @@ where
 import Concur.Replica
 import qualified Data.FileEmbed as FE
 import qualified Data.Map as Map (fromList)
-import Helloworld.Import.External
+import {{name-as-module}}.Import.External
 import qualified Network.Wai.Middleware.StaticEmbedded as S
 
 headerHTML :: HTML
