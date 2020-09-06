@@ -238,8 +238,8 @@ import {{name-as-module}}.Import.External as X
 {-# START_FILE src/{{name-as-module}}/Import/External.hs #-}
 module {{name-as-module}}.Import.External (module X) where
 
-import Network.Wai as X (Middleware)
 import Chronos as X (Timespan (..), stopwatch)
+import Concur.Core as X (Widget, step)
 import Control.Concurrent.Async as X
   ( Async (..),
     async,
@@ -249,7 +249,17 @@ import Control.Concurrent.Async as X
     race,
     waitAny,
   )
+import Control.Concurrent.STM as X (atomically)
+import Control.Concurrent.STM.TChan as X
+  ( TChan,
+    dupTChan,
+    newBroadcastTChan,
+    newTChan,
+    readTChan,
+    writeTChan,
+  )
 import Control.Concurrent.Thread.Delay as X (delay)
+import Control.Monad (forever)
 import Data.Bifunctor as X (bimap, first, second)
 import Data.Coerce as X (coerce)
 import Data.Either.Extra as X (fromEither)
@@ -258,6 +268,7 @@ import Data.Maybe as X (catMaybes)
 import Data.Monoid as X (All (..), mconcat)
 import Data.Pool as X (Pool, destroyAllResources)
 import Data.Ratio as X ((%), denominator, numerator)
+import Data.Text as X (strip)
 import Data.Time.Clock as X
   ( DiffTime,
     UTCTime,
@@ -310,11 +321,17 @@ import Katip as X
     registerScribe,
     runKatipContextT,
   )
-import Universum as X hiding ((^.), on, set, atomically)
+import Network.Wai as X (Middleware)
+import Universum as X hiding ((^.), atomically, on, set)
 import UnliftIO as X (MonadUnliftIO (..), UnliftIO (..), withRunInIO)
 
 {-# START_FILE src/{{name-as-module}}/Data/Type.hs #-}
-module {{name-as-module}}.Data.Type (LogFormat(..)) where
+module {{name-as-module}}.Data.Type
+  ( LogFormat (..),
+    Message (..),
+    ChatEvent (..),
+  )
+where
 
 import {{name-as-module}}.Import.External
 
@@ -323,6 +340,15 @@ data LogFormat
   | JSON
   deriving (Read)
 
+newtype Message = Message Text
+
+data ChatEvent
+  = ChatSend Message
+  | ChatKeyDown Text
+  | ChatRefresh Message
+  | ChatTyping Message
+
+
 {-# START_FILE src/{{name-as-module}}/Data/Env.hs #-}
 {-# LANGUAGE BangPatterns #-}
 
@@ -330,13 +356,13 @@ module {{name-as-module}}.Data.Env
   ( Env (..),
     RawConfig (..),
     rawConfig,
-    newEnv
+    newEnv,
   )
 where
 
+import Env ((<=<), auto, header, help, keep, nonempty, parse, str, var)
 import {{name-as-module}}.Data.Type
 import {{name-as-module}}.Import.External
-import Env ((<=<), auto, header, help, keep, nonempty, parse, str, var)
 
 data Env
   = Env
@@ -345,7 +371,10 @@ data Env
         -- logging
         envKatipNS :: Namespace,
         envKatipCTX :: LogContexts,
-        envKatipLE :: LogEnv
+        envKatipLE :: LogEnv,
+        -- app
+        envMsgAlert :: TChan (),
+        envMsgHistory :: TVar [Message]
       }
 
 data RawConfig
@@ -366,14 +395,16 @@ rawConfig =
       <*> var (str <=< nonempty) "{{env-prefix}}{{^env-prefix}}TODO_ADD_ENV_PREFIX{{/env-prefix}}_LOG_ENV" op
       <*> var (auto <=< nonempty) "{{env-prefix}}{{^env-prefix}}TODO_ADD_ENV_PREFIX{{/env-prefix}}_LOG_FORMAT" op
       <*> var (auto <=< nonempty) "{{env-prefix}}{{^env-prefix}}TODO_ADD_ENV_PREFIX{{/env-prefix}}_LOG_VERBOSITY" op
-    where
-      op = keep <> help ""
+  where
+    op = keep <> help ""
 
 newEnv :: RawConfig -> KatipContextT IO Env
 newEnv !rc = do
   le <- getLogEnv
   ctx <- getKatipContext
   ns <- getKatipNamespace
+  ma <- liftIO $ atomically newBroadcastTChan
+  mh <- liftIO $ atomically $ newTVar []
   return $
     Env
       { -- general
@@ -381,7 +412,10 @@ newEnv !rc = do
         -- logging
         envKatipLE = le,
         envKatipCTX = ctx,
-        envKatipNS = ns
+        envKatipNS = ns,
+        -- app
+        envMsgAlert = ma,
+        envMsgHistory = mh
       }
 
 {-# START_FILE src/{{name-as-module}}/Data/AppM.hs #-}
@@ -428,6 +462,122 @@ instance (MonadIO m) => KatipContext (AppM m) where
 
 instance (MonadIO m) => EnvM (AppM m) where
   getEnv = ask
+
+{-# START_FILE src/{{name-as-module}}/Wai/Chat.hs #-}
+{-# LANGUAGE OverloadedStrings #-}
+
+module {{name-as-module}}.Wai.Chat
+  ( app,
+  )
+where
+
+import Concur.Core.Types (Widget)
+import Concur.Replica hiding (id, step)
+import Concur.Replica.DOM (button, input, li, text, ul)
+import Concur.Replica.DOM.Events (BaseEvent (target), onClick, onInput, targetValue)
+import Concur.Replica.DOM.Props (value)
+import Control.Applicative
+import Control.Monad.IO.Class (liftIO)
+import {{name-as-module}}.Import hiding (div)
+import qualified {{name-as-module}}.Wai.Static as Static
+import qualified Network.Wai as Wai
+import qualified Network.Wai.Handler.Replica as R
+import Network.WebSockets (defaultConnectionOptions)
+
+-- A simple chat app demonstrating communication between clients using STM.
+-- The widget is waiting for either the user to send a message or
+-- another client to alert a new message. When a client sends a message
+-- the chatWidget will update the messageHistory and then alert the other
+-- clients by writing to messageAlert.
+
+mainWidget :: Env -> Widget HTML ()
+mainWidget env = do
+  bc <- liftIO . atomically . dupTChan $ envMsgAlert env
+  div
+    [className "ui container compact padded"]
+    [void $ chatWidget env bc $ Message mempty]
+
+chatWidget :: Env -> TChan () -> Message -> Widget HTML ()
+chatWidget env bc msg = do
+  messageHistory <- liftIO . readTVarIO $ msgsTVar
+  chatAction <- messageEditor bc msg <|> messagesList messageHistory
+  case chatAction of
+    ChatTyping x -> chatWidget env bc x
+    ChatRefresh x -> chatWidget env bc x
+    ChatKeyDown _ -> chatWidget env bc msg
+    ChatSend x -> sendMsg x
+  where
+    msgsTVar = envMsgHistory env
+    messageAlert = envMsgAlert env
+    sendMsg x = do
+      let x0 = strip $ coerce x
+      if x0 == mempty
+        then chatWidget env bc x
+        else do
+          liftIO . atomically $ do
+            -- Add this message to the messageHistory
+            modifyTVar' msgsTVar (x :)
+            -- Notify all clients about the updates
+            writeTChan messageAlert ()
+          chatWidget env bc $ Message mempty
+
+messageEditor :: TChan () -> Message -> Widget HTML ChatEvent
+messageEditor bc typing = do
+  event <- editor <|> updater
+  case event of
+    ChatTyping x -> messageEditor bc x
+    ChatKeyDown "Enter" -> pure $ ChatSend typing
+    ChatKeyDown _ -> messageEditor bc typing
+    ChatSend _ -> pure event
+    ChatRefresh _ -> pure event
+  where
+    updater =
+      ChatRefresh typing <$ (liftIO . atomically . readTChan $ bc)
+    editor =
+      div
+        [className "text-align-center"]
+        [ div
+            [className "form-inline margin-bottom"]
+            [ div
+                [ classList [("form-group", True), ("has-error", False)]
+                ]
+                [ div
+                    [className "input-group"]
+                    [ input
+                        [ className "form-control",
+                          autofocus True,
+                          value $ coerce typing,
+                          type_ "text",
+                          ChatTyping . Message . targetValue . target <$> onInput,
+                          ChatKeyDown . kbdKey <$> onKeyDown
+                        ],
+                      span
+                        [className "input-group-btn"]
+                        [ button
+                            [ className "btn btn-primary",
+                              ChatSend typing <$ onClick
+                            ]
+                            [text "Send"]
+                        ]
+                    ]
+                ]
+            ]
+        ]
+
+messagesList :: [Message] -> Widget HTML ChatEvent
+messagesList xs = ul [className "list-group"] $ messageItem <$> xs
+
+messageItem :: Message -> Widget HTML ChatEvent
+messageItem x = li [className "list-group-item"] [text $ coerce x]
+
+app :: Env -> Wai.Application
+app env =
+  R.app
+    (defaultIndex "Chat" Static.headerHTML)
+    defaultConnectionOptions
+    Static.middleware
+    (step <$> const (mainWidget env))
+    stepWidget
 
 {-# START_FILE src/{{name-as-module}}/Wai/Static.hs #-}
 {-# LANGUAGE TemplateHaskell #-}
@@ -491,25 +641,44 @@ middleware =
       ("app.css", $(FE.embedFile "./static/css/app.css"))
     ]
 
-{-# START_FILE src/Lib.hs #-}
-module Lib
-  ( someFunc,
+{-# START_FILE app/Main.hs #-}
+{-# LANGUAGE BangPatterns #-}
+{-# LANGUAGE TemplateHaskell #-}
+
+module Main
+  ( main,
   )
 where
 
+import {{name-as-module}}.Data.AppM (runApp)
 import {{name-as-module}}.Import
-
-someFunc :: IO ()
-someFunc = putStrLn ("someFunc" :: Text)
-
-{-# START_FILE app/Main.hs #-}
-module Main (main) where
-
-import {{name-as-module}}.Import
-import Lib
+import qualified {{name-as-module}}.Wai.Chat as Chat (app)
+import qualified Network.Wai.Handler.Warp as Warp
 
 main :: IO ()
-main = someFunc
+main = do
+  !rc <- rawConfig
+  handleScribe <-
+    mkHandleScribeWithFormatter
+      ( case rawConfigLogFormat rc of
+          Bracket -> bracketFormat
+          JSON -> jsonFormat
+      )
+      ColorIfTerminal
+      stdout
+      (permitItem InfoS)
+      (rawConfigLogVerbosity rc)
+  let mkLogEnv =
+        registerScribe "stdout" handleScribe defaultScribeSettings
+          =<< initLogEnv "{{name-as-module}}" (Environment $ rawConfigLogEnv rc)
+  bracket mkLogEnv closeScribes $ \le ->
+    runKatipContextT le (mempty :: LogContexts) mempty $ do
+      !env <- newEnv rc
+      lift $ runApp env $ do
+        res <- liftIO $ Warp.run (envEndpointPort env) $ Chat.app env
+        $(logTM) ErrorS
+          $ logStr
+          $ "Terminate program with result " <> (show res :: Text)
 
 {-# START_FILE README.md #-}
 # {{name}}
@@ -926,7 +1095,7 @@ let haskell-ide = import (
 in
 
 stdenv.mkDerivation {
-  name = "{{name}}-env";
+  name = "{{name}}-shell";
   buildInputs = [
     /* IDE */
     haskell-ide
@@ -1044,6 +1213,7 @@ set -e
 
 export {{env-prefix}}{{^env-prefix}}TODO_ADD_ENV_PREFIX{{/env-prefix}}_LOG_ENV="dev"
 export {{env-prefix}}{{^env-prefix}}TODO_ADD_ENV_PREFIX{{/env-prefix}}_LOG_FORMAT="Bracket" # Bracket | JSON
+export {{env-prefix}}{{^env-prefix}}TODO_ADD_ENV_PREFIX{{/env-prefix}}_LOG_VERBOSITY="V3"
 export {{env-prefix}}{{^env-prefix}}TODO_ADD_ENV_PREFIX{{/env-prefix}}_LIBPQ_CONN_STR="postgresql://nixbld1@localhost/{{name}}"
 export {{env-prefix}}{{^env-prefix}}TODO_ADD_ENV_PREFIX{{/env-prefix}}_ENDPOINT_PORT="3000"
 
