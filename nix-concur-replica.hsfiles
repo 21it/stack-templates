@@ -743,19 +743,19 @@ curl -u ${CIRCLE_API_USER_TOKEN}: \
      "https://circleci.com/api/v1.1/project/github/{{organization}}{{^organization}}TODO_ADD_ORGANIZATION{{/organization}}/{{name}}/tree/$1"
 
 {-# START_FILE ./nix/default.nix #-}
+let nixpkgs = import ./nixpkgs.nix;
+in
 {
-  pkgs ? null,
+  pkgs ? import nixpkgs {
+    overlays = import ./overlay.nix {
+      inherit hexOrganization hexApiKey robotSshKey;
+    };
+  },
   hexOrganization ? null, # organization account name on hex.pm
   hexApiKey ? null,       # plain text account API key on hex.pm
   robotSshKey ? null      # base64-encoded private id_rsa (for private git)
 }:
-let overlays = import ./overlay.nix {
-                 inherit hexOrganization hexApiKey robotSshKey;
-               };
-    localPkgs = import ./nixpkgs.nix;
-    nixpkgs = if pkgs == null then import localPkgs {inherit overlays;} else pkgs;
-in
-with nixpkgs;
+with pkgs;
 
 let callPackage = lib.callPackageWith haskellPackages;
     pkg = callPackage ./pkg.nix {inherit stdenv;};
@@ -776,6 +776,7 @@ in
     enableLibraryProfiling = false;
     isLibrary = false;
     doHaddock = false;
+    prePatch = "hpack --force";
     preCheck = ''
       source ./nix/export-test-envs.sh;
       sh ./nix/reset-test-data.sh;
@@ -795,7 +796,11 @@ in
 let nixpkgs = import ./nixpkgs.nix;
 in
 {
-  pkgs ? import nixpkgs {},
+  pkgs ? import nixpkgs {
+    overlays = import ./overlay.nix {
+      inherit hexOrganization hexApiKey robotSshKey;
+    };
+  },
   hexOrganization ? null, # organization account name on hex.pm
   hexApiKey ? null,       # plain text account API key on hex.pm
   robotSshKey ? null      # base64-encoded private id_rsa (for private git)
@@ -826,7 +831,9 @@ builtins.fetchTarball {
 {
   hexOrganization,
   hexApiKey,
-  robotSshKey
+  robotSshKey,
+  vimBackground ? "light",
+  vimColorScheme ? "PaperColor"
 }:
 [
   (self: super:
@@ -836,6 +843,9 @@ builtins.fetchTarball {
       doJailbreak = self.haskell.lib.doJailbreak;
     in
       {
+        haskell-ide = import (
+          fetchTarball "https://github.com/tim2CF/ultimate-haskell-ide/tarball/01f50964156a60957428ce103e238b093861328e"
+        ) {inherit vimBackground vimColorScheme;};
         haskellPackages = super.haskell.packages.ghc865.extend(
           self': super': {
             universum = dontCheck super'.universum;
@@ -1083,24 +1093,18 @@ mkDerivation {
 let nixpkgs = import ./nixpkgs.nix;
 in
 {
-  pkgs ? null,
+  pkgs ? import nixpkgs {
+    overlays = import ./overlay.nix {
+      inherit hexOrganization hexApiKey robotSshKey vimBackground vimColorScheme;
+    };
+  },
   hexOrganization ? null, # organization account name on hex.pm
   hexApiKey ? null,       # plain text account API key on hex.pm
-  robotSshKey ? null      # base64-encoded private id_rsa (for private git)
+  robotSshKey ? null,     # base64-encoded private id_rsa (for private git)
+  vimBackground ? "light",
+  vimColorScheme ? "PaperColor"
 }:
-let overlays = import ./overlay.nix {
-                 inherit hexOrganization hexApiKey robotSshKey;
-               };
-    pkgs' = if pkgs == null
-            then import nixpkgs {inherit overlays;}
-            else pkgs;
-in
-with pkgs';
-
-let haskell-ide = import (
-      fetchTarball "https://github.com/tim2CF/ultimate-haskell-ide/tarball/master"
-    ) {};
-in
+with pkgs;
 
 stdenv.mkDerivation {
   name = "{{name}}-shell";
@@ -1232,8 +1236,6 @@ set -e
 
 ./nix/bootstrap.sh
 
-(cd ./nix/ && cabal2nix ./.. > ./pkg.nix)
-
 NIXPKGS_ALLOW_BROKEN=1 nix-build ./nix/docker.nix \
   -I ssh-config-file=/tmp/.ssh/config \
   --argstr hexOrganization {{organization}}{{^organization}}TODO_ADD_ORGANIZATION{{/organization}} \
@@ -1261,6 +1263,8 @@ docker run -it --rm \
 #!/bin/sh
 
 export IP=$(ifconfig en0 | grep inet | awk '$1=="inet" {print $2}')
+export VIM_BACKGROUND="${VIM_BACKGROUND:-light}"
+export VIM_COLOR_SCHEME="${VIM_COLOR_SCHEME:-PaperColor}"
 echo "host is $IP"
 echo "starting nixos container..."
 # enable for GUI apps
@@ -1280,6 +1284,8 @@ docker run -it --rm \
    --argstr hexOrganization $HEX_ORGANIZATION \
    --argstr hexApiKey $HEX_API_KEY \
    --argstr robotSshKey $ROBOT_SSH_KEY \
+   --argstr vimBackground $VIM_BACKGROUND \
+   --argstr vimColorScheme $VIM_COLOR_SCHEME \
    --option sandbox false \
    -v --show-trace
   "
