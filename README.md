@@ -72,6 +72,6 @@ vi .
 <p align="center">
   <tt>
     Made with ❤️ by
-    <a href="https://tkachuklabs.com" target="_blank">tkachuk.labs</a>
+    <a href="https://tkachuklabs.gitlab.io" target="_blank">tkachuk.labs</a>
   </tt>
 </p>
