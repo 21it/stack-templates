@@ -153,6 +153,7 @@ tests:
 {-# START_FILE stack.yaml #-}
 resolver: lts-14.27
 system-ghc: true
+allow-different-user: true
 packages:
   - .
 extra-deps:
@@ -167,9 +168,7 @@ extra-deps:
   - swagger2-2.3.1.1
   - wai-middleware-static-embedded-0.1.0.0@sha256:036b7823a5e69452d1fe1e270ef3d4988063caa5bb00b6dfc356e1c21b7433e3,1581
   - github: tkachuk-labs/persistent-migration
-    commit: d75fb27181319e3fe18ff19e45198feee6a88187
-    sha256: 9fcae8fbae3bd004bde3dee64f394083b21fcc6c3246752d23b2c050406a33a8
-    size: 24681
+    commit: 3afe6367363efafbc788ea72eb2c0492884d458a
   - github: tkachuk-labs/HaskellNet
     commit: 73bf47e9e4ee7ec18da0da2b23a18d4e4baa8485
     sha256: d861bb9123051e90b00545a35f93aebc852370cbcc759b4efb4bc4dd75210f35
@@ -844,7 +843,7 @@ builtins.fetchTarball {
     in
       {
         haskell-ide = import (
-          fetchTarball "https://github.com/tim2CF/ultimate-haskell-ide/tarball/01f50964156a60957428ce103e238b093861328e"
+          fetchTarball "https://github.com/tim2CF/ultimate-haskell-ide/tarball/d455f6a3c7f7c363efa65da2ff003dbf3b4228d2"
         ) {inherit vimBackground vimColorScheme;};
         haskellPackages = super.haskell.packages.ghc865.extend(
           self': super': {
@@ -890,8 +889,8 @@ mkDerivation {
   version = "0.1.0";
   src = fetchgit {
     url = "https://github.com/tkachuk-labs/persistent-migration";
-    sha256 = "0sbq8ks81x42ih5a66g1fm0gwgmpmhwnyq9v13sqiaiwv8fnrkid";
-    rev = "d75fb27181319e3fe18ff19e45198feee6a88187";
+    sha256 = "1ysjkfgaxr8iv9g836ky9792sp7fanp0d09c4sgz1cwn4r6za4xq";
+    rev = "3afe6367363efafbc788ea72eb2c0492884d458a";
     fetchSubmodules = true;
   };
   libraryHaskellDepends = [
@@ -1124,6 +1123,7 @@ stdenv.mkDerivation {
   ];
 
   TERM="xterm-256color";
+  LC_ALL="C.UTF-8";
   GIT_SSL_CAINFO="${cacert}/etc/ssl/certs/ca-bundle.crt";
   NIX_SSL_CERT_FILE="${cacert}/etc/ssl/certs/ca-bundle.crt";
   NIX_PATH="/nix/var/nix/profiles/per-user/root/channels";

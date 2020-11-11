@@ -28,33 +28,33 @@ vi ~/.zshrc
 
 # hex.pm access to private Erlang/Elixir dependencies
 export HEX_API_KEY="your-hex.pm-api-key"
+# hex.pm organization
 export HEX_ORGANIZATION="your-hex.pm-organization"
 # ssh access to private git dependencies
 export ROBOT_SSH_KEY="$(cat ~/.ssh/id_rsa | base64)"
+# optional appearance parameters
+export VIM_BACKGROUND="light" # or "dark"
+export VIM_COLOR_SCHEME="PaperColor" # or "jellybeans"
 ```
 
 ## Templates
 
-- `nix-app` executable template, builds to Docker image
-- `nix-lib` library template, builds to Nix/Stack package
-- `nix-yesod` yesod application template, builds to Docker image
+- `nix-yesod` classic yesod application
+- `nix-concur-replica` experimental live view application
 
 ## Usage
 
 ```bash
 stack new hello-world \
-  github:tkachuk-labs/nix-app \
+  github:tkachuk-labs/nix-yesod \
   -p organization:tkachuk-labs \
-  -p env-prefix:HELLO_WORLD \
-  --resolver lts-14.27
+  -p env-prefix:HELLO_WORLD
 
 cd ./hello-world
 
 git init
 
 chmod a+x ./nix/*.sh
-
-echo "system-ghc: true" >> stack.yaml
 
 ./nix/shell.sh
 
@@ -65,7 +65,6 @@ vi .
 
 ## Known issues
 
-- `nix-yesod` uses [persistent-migration](https://github.com/coingaming/persistent-migration) package which is not in stackage atm. Add it manually to both `package.yaml` and `stack.yaml` files.
 - In some cases Postgres can't use local `./postgres` directory because of permission restrictions. The fix is to manually remove directory with `rm -rf ./postgres`, and rerun command which caused the issue. Nix will create directory again with proper permissions.
 - Ultimate Haskell IDE has some [known issues](https://github.com/tim2CF/ultimate-haskell-ide#known-issues) as well.
 
