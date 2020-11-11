@@ -27,11 +27,14 @@ Docker and Nix can get access to private repositories through environment variab
 vi ~/.zshrc
 
 # hex.pm access to private Erlang/Elixir dependencies
-export HEX_API_KEY="your-hex.pm-api-key"
+export HEX_API_KEY="SECRET"
 # hex.pm organization
-export HEX_ORGANIZATION="your-hex.pm-organization"
+export HEX_ORGANIZATION="tkachuk-labs"
 # ssh access to private git dependencies
 export ROBOT_SSH_KEY="$(cat ~/.ssh/id_rsa | base64)"
+# git user info
+export GIT_AUTHOR_NAME="tkachuk-labs"
+export GIT_AUTHOR_EMAIL="tkachuk.labs@gmail.com"
 # optional appearance parameters
 export VIM_BACKGROUND="light" # or "dark"
 export VIM_COLOR_SCHEME="PaperColor" # or "jellybeans"
