@@ -778,7 +778,6 @@ in
     prePatch = "hpack --force";
     preCheck = ''
       source ./nix/export-test-envs.sh;
-      sh ./nix/reset-test-data.sh;
       sh ./nix/spawn-test-deps.sh;
     '';
     postCheck = ''
@@ -1137,7 +1136,6 @@ stdenv.mkDerivation {
   EMAIL = gitAuthorEmail;
   shellHook = ''
     source ./nix/export-test-envs.sh
-    sh ./nix/reset-test-data.sh
     sh ./nix/spawn-test-deps.sh
 
     export HOOGLEDB=/root/.hoogle
@@ -1249,13 +1247,6 @@ NIXPKGS_ALLOW_BROKEN=1 nix-build ./nix/docker.nix \
   --option sandbox false \
   -v --show-trace
 
-{-# START_FILE ./nix/reset-test-data.sh #-}
-#!/bin/sh
-
-echo "resetting dev data..."
-rm -rf $PGDATA
-echo "dev data has been reset!"
-
 {-# START_FILE ./nix/minimal.sh #-}
 #!/bin/sh
 
@@ -1305,7 +1296,7 @@ set -m
 export PATH=$PATH:/bin/
 export PGDATA=$PWD/postgres
 export PGHOST=/tmp/postgres
-export PGLOG=$PWD/postgres/LOG
+export PGLOG=$PGDATA/LOG
 export PGDATABASE=postgres
 export DATABASE_URL="postgresql:///postgres?host=$PGHOST"
 
@@ -1314,9 +1305,9 @@ export DATABASE_URL="postgresql:///postgres?host=$PGHOST"
 #
 
 if [[ $EUID -ne 0 ]]; then
-    alias postgres-sh="sh"
+  alias postgres-sh="sh"
 else
-    alias postgres-sh="su -m nixbld1"
+  alias postgres-sh="su -m nixbld1"
 fi
 
 echo "shutdown postgres..."
@@ -1331,7 +1322,7 @@ set -m
 export PATH=$PATH:/bin/
 export PGDATA=$PWD/postgres
 export PGHOST=/tmp/postgres
-export PGLOG=$PWD/postgres/LOG
+export PGLOG=$PGDATA/LOG
 export PGDATABASE=postgres
 export DATABASE_URL="postgresql:///postgres?host=$PGHOST"
 
@@ -1340,27 +1331,39 @@ export DATABASE_URL="postgresql:///postgres?host=$PGHOST"
 #
 
 if [[ $EUID -ne 0 ]]; then
-    alias postgres-sh="sh"
+  alias postgres-sh="sh"
 else
-    alias postgres-sh="su -m nixbld1"
+  alias postgres-sh="su -m nixbld1"
 fi
 
 if [ ! -d $PGHOST ]; then
-  echo 'initializing postgresql workspace...'
+  echo "initializing postgresql workspace..."
   postgres-sh -c "mkdir -p $PGHOST"
 fi
+
 if [ ! -d $PGDATA ]; then
-  echo 'initializing postgresql database...'
+  echo "initializing postgresql database..."
   postgres-sh -c "mkdir -p $PGDATA"
-  postgres-sh -c 'initdb $PGDATA --encoding=UTF8 --auth=trust >/dev/null'
+  postgres-sh -c "initdb $PGDATA --encoding=UTF8 --auth=trust > /dev/null"
+fi
+
+if [[ $EUID -ne 0 ]]; then
+  echo "operating as root..."
+  chown -R root $PGDATA
+  chown -R root $PGHOST
+else
+  echo "operating as nixbld1..."
+  chown -R nixbld1 $PGDATA
+  chown -R nixbld1 $PGHOST
 fi
 
 echo "starting postgres..."
-postgres-sh -c 'pg_ctl start -o "-c listen_addresses=localhost -c unix_socket_directories=$PGHOST"'
+postgres-sh -c 'pg_ctl start -o "-c listen_addresses=localhost -c unix_socket_directories=$PGHOST" > /dev/null'
 
-# NOTE : some Postgres bullshit - it crashes if createdb is executed too soon
-echo "sleeping for 3s to prevent postgres/createdb race condition..."
-sleep 3
+until postgres-sh -c 'pg_isready' 2>/dev/null; do
+  >&2 echo "postgres is unavailable - sleeping for 3 seconds..."
+  sleep 3
+done
 
 postgres-sh -c 'createdb {{name}}'
 echo "spawn-test-deps executed"
