@@ -297,7 +297,7 @@ createdb {{name}}_test
 
 If you have trouble, refer to the [Yesod Quickstart guide](https://www.yesodweb.com/page/quickstart) for additional detail.
 
-## Development
+## Hot code reloading
 
 Start a development server with:
 
