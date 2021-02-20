@@ -682,6 +682,42 @@ main = do
 {-# START_FILE README.md #-}
 # {{name}}
 
+Interactive web chat based on `concur-replica` (Haskell live view).
+
+## Development
+
+Sometimes projects are using dependencies from private repositories. Docker and Nix can get access to private repositories through environment variables:
+
+```shell
+vi ~/.profile
+
+# hex.pm access to private Erlang/Elixir dependencies
+export HEX_API_KEY="SECRET"
+# hex.pm organization
+export HEX_ORGANIZATION="{{author-name}}{{^author-name}}tkachuk-labs{{/author-name}}"
+# ssh access to private git dependencies
+export ROBOT_SSH_KEY="$(cat ~/.ssh/id_rsa | base64 --wrap=0)"
+# git user info
+export GIT_AUTHOR_NAME="{{author-name}}{{^author-name}}tkachuk-labs{{/author-name}}"
+export GIT_AUTHOR_EMAIL="{{author-email}}{{^author-email}}tkachuk.labs@gmail.com{{/author-email}}"
+# optional appearance parameters
+export VIM_BACKGROUND="light" # or "dark"
+export VIM_COLOR_SCHEME="PaperColor" # or "jellybeans"
+```
+
+And then:
+
+```shell
+# start nix-shell
+./nix/shell.sh
+
+# run tests in nix-shell
+stack test
+
+# develop in nix-shell
+vi .
+```
+
 {-# START_FILE ChangeLog.md #-}
 # Changelog for {{name}}
 
@@ -842,7 +878,7 @@ builtins.fetchTarball {
     in
       {
         haskell-ide = import (
-          fetchTarball "https://github.com/tim2CF/ultimate-haskell-ide/tarball/d455f6a3c7f7c363efa65da2ff003dbf3b4228d2"
+          fetchTarball "https://github.com/tim2CF/ultimate-haskell-ide/tarball/a6c2ca747a8b226b9fac51b33600347df61d549f"
         ) {inherit vimBackground vimColorScheme;};
         haskellPackages = super.haskell.packages.ghc865.extend(
           self': super': {
