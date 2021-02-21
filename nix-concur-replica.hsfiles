@@ -694,11 +694,11 @@ vi ~/.profile
 # hex.pm access to private Erlang/Elixir dependencies
 export HEX_API_KEY="SECRET"
 # hex.pm organization
-export HEX_ORGANIZATION="{{author-name}}{{^author-name}}tkachuk-labs{{/author-name}}"
+export HEX_ORGANIZATION="{{organization}}{{^organization}}tkachuk-labs{{/organization}}"
 # ssh access to private git dependencies
 export ROBOT_SSH_KEY="$(cat ~/.ssh/id_rsa | base64 --wrap=0)"
 # git user info
-export GIT_AUTHOR_NAME="{{author-name}}{{^author-name}}tkachuk-labs{{/author-name}}"
+export GIT_AUTHOR_NAME="{{github-username}}{{^github-username}}tkachuk-labs{{/github-username}}"
 export GIT_AUTHOR_EMAIL="{{author-email}}{{^author-email}}tkachuk.labs@gmail.com{{/author-email}}"
 # optional appearance parameters
 export VIM_BACKGROUND="light" # or "dark"

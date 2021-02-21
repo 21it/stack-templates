@@ -15,8 +15,19 @@
 
 ## Prerequisites
 
-- Stack
 - Docker
+
+- Stack (with following `~/.stack/config.yaml`)
+
+```yaml
+templates:
+  params:
+    author-email: tkachuk.labs@gmail.com
+    author-name: Ilja Tkachuk
+    category: Data
+    github-username: tkachuk-labs
+    organization: tkachuk-labs
+```
 
 ## Templates
 
@@ -26,10 +37,7 @@
 ## Usage
 
 ```bash
-stack new hello-world \
-  github:tkachuk-labs/nix-yesod \
-  -p organization:tkachuk-labs \
-  -p env-prefix:HELLO_WORLD
+stack new hello-world github:tkachuk-labs/nix-yesod -p env-prefix:HELLO_WORLD
 
 cd ./hello-world
 
