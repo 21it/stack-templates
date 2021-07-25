@@ -38,6 +38,7 @@ dependencies:
 # logging
 - katip
 - monad-logger
+- co-log
 # web
 - wai
 - wai-middleware-static-embedded
@@ -173,6 +174,8 @@ extra-deps:
   - network-bitcoin-1.9.1@sha256:f950326eef853c8ce5a15a2fc65ed0291669b60b3138538629469fbeaf447d96,2420
   - swagger2-2.3.1.1
   - wai-middleware-static-embedded-0.1.0.0@sha256:036b7823a5e69452d1fe1e270ef3d4988063caa5bb00b6dfc356e1c21b7433e3,1581
+  - hex-text-0.1.0.4@sha256:0ea54d08f85324498b2db3480f05efc17eb03177c564fce81dadef53752db2c5,1277
+  - base16-bytestring-1.0.1.0@sha256:33b9d57afa334d06485033e930c6b13fc760baf88fd8f715ae2f9a4b46e19a54,2641
   - github: tkachuk-labs/persistent-migration
     commit: 3afe6367363efafbc788ea72eb2c0492884d458a
   - github: tkachuk-labs/HaskellNet
@@ -180,19 +183,19 @@ extra-deps:
     sha256: d861bb9123051e90b00545a35f93aebc852370cbcc759b4efb4bc4dd75210f35
     size: 55457
   - github: tkachuk-labs/concur
-    commit: dc5347b35c79654d58fa95716f425ee7248504fb
-    sha256: 0253f7cc909e8620a1ca9f45a553dfb77b502dbdc77cbe0f0e92e63c4ff5f81b
-    size: 6137383
+    commit: 5d7366a25c0688b504ca263ee689b4f6618313d1
+    sha256: 11495367b5007b46aa1fc8e654a0e2ea9c201fffdcfe5e2d5516be07e9657192
+    size: 6147070
     subdirs:
       - concur-core
   - github: tkachuk-labs/replica
-    commit: c0046ff9b3be5e20e5306de743b83620cf59c6a9
-    sha256: d7d043b603be23acbfa04fbf198dc136909e23f8aa502aafa05dcc5b9e25daf5
-    size: 195022
+    commit: e4b0988f7a4053fb7edc73e6267b00bfbfb70178
+    sha256: cf8b4a60611dc4fc8c429e612d11ba9ce1ae53036a7bd23eac5556b6f3ee3474
+    size: 206782
   - github: tkachuk-labs/concur-replica
-    commit: 7d16bcc93114c62252e3e22c208dc2a819f02435
-    sha256: 2a808d1214b48eb8fb8f98740b0b37022c26e52e8cbf4d201f19866bed2519bd
-    size: 25421
+    commit: cdbf120bfbe2b74448985417261986a6c572b15e
+    sha256: fbc8db6149419c712d340c781adecf2a3833480b01f35990088431dc17fe1dbf
+    size: 18444
   - github: tkachuk-labs/gRPC-haskell
     commit: 8eaee520cd1a2ae909d2ef7ce16ce3a17be4418a
     sha256: d9c150a855b85b5ebc1c22c2fcc0ea171ee0fdee46dd626a115f8405cb5c4502
@@ -244,7 +247,7 @@ import {{name-as-module}}.Import.External as X
 module {{name-as-module}}.Import.External (module X) where
 
 import Chronos as X (Timespan (..), stopwatch)
-import Concur.Core as X (Widget, step)
+import Concur.Core as X (Widget)
 import Control.Concurrent.Async as X
   ( Async (..),
     async,
@@ -476,18 +479,20 @@ module {{name-as-module}}.Wai.Chat
   )
 where
 
-import Concur.Core.Types (Widget)
-import Concur.Replica hiding (id, step)
+import qualified Colog as Co
+import Concur.Core (ResourceT, WidgetStream (WidgetResult, WidgetTerminate, WidgetView), widgetStream)
+import Concur.Replica hiding (id, s, step)
 import Concur.Replica.DOM (button, input, li, text, ul)
-import Concur.Replica.DOM.Events (BaseEvent (target), onClick, onInput, targetValue)
-import Concur.Replica.DOM.Props (value)
+import Concur.Replica.Events (BaseEvent (target), onClick, onInput, targetValue)
+import qualified Concur.Replica.Log as L
+import Concur.Replica.Props (value)
+import qualified Concur.Replica.Run as CR
 import Control.Applicative
 import Control.Monad.IO.Class (liftIO)
 import {{name-as-module}}.Import hiding (div)
 import qualified {{name-as-module}}.Wai.Static as Static
 import qualified Network.Wai as Wai
 import qualified Network.Wai.Handler.Replica as R
-import Network.WebSockets (defaultConnectionOptions)
 
 -- A simple chat app demonstrating communication between clients using STM.
 -- The widget is waiting for either the user to send a message or
@@ -575,14 +580,32 @@ messagesList xs = ul [className "list-group"] $ messageItem <$> xs
 messageItem :: Message -> Widget HTML ChatEvent
 messageItem x = li [className "list-group-item"] [text $ coerce x]
 
-app :: Env -> Wai.Application
-app env =
-  R.app
-    (defaultIndex "Chat" Static.headerHTML)
-    defaultConnectionOptions
-    Static.middleware
-    (step <$> const (mainWidget env))
-    stepWidget
+app :: Env -> ((Wai.Application -> IO a) -> IO a)
+app env = R.app c1
+  where
+    c0 = CR.mkDefaultConfig 3000 "Chat"
+    c1 =
+      R.Config
+        { R.cfgTitle = CR.cfgTitle c0,
+          R.cfgHeader = Static.headerHTML,
+          R.cfgWSConnectionOptions = CR.cfgWSConnectionOptions c0,
+          R.cfgMiddleware = Static.middleware,
+          R.cfgLogAction = Co.cmap (fmap L.ReplicaLog) $ CR.cfgLogAction c0,
+          R.cfgWSInitialConnectLimit = CR.cfgWSInitialConnectLimit c0,
+          R.cfgWSReconnectionSpanLimit = CR.cfgWSReconnectionSpanLimit c0,
+          R.cfgInitial = pure . widgetStream $ mainWidget env,
+          R.cfgStep = stepWidget
+        }
+
+stepWidget ::
+  ResourceT IO (WidgetStream HTML a) ->
+  ResourceT IO (Maybe (HTML, ResourceT IO (WidgetStream HTML a)))
+stepWidget s = do
+  r <- s
+  case r of
+    WidgetView v next -> pure $ Just (v, next)
+    WidgetResult _ -> pure Nothing
+    WidgetTerminate -> pure Nothing
 
 {-# START_FILE src/{{name-as-module}}/Wai/Static.hs #-}
 {-# LANGUAGE TemplateHaskell #-}
@@ -613,7 +636,6 @@ metaHTML =
             ("content", AText "width=device-width, initial-scale=1")
           ]
       )
-      Nothing
   ]
 
 assetsHTML :: HTML
@@ -624,8 +646,7 @@ assetsHTML =
           [ ("href", AText "bootstrap.css"),
             ("rel", AText "stylesheet")
           ]
-      )
-      Nothing,
+      ),
     VLeaf
       "link"
       ( fl
@@ -633,7 +654,6 @@ assetsHTML =
             ("rel", AText "stylesheet")
           ]
       )
-      Nothing
   ]
 
 fl :: [(Text, Attr)] -> Attrs
@@ -679,11 +699,11 @@ main = do
   bracket mkLogEnv closeScribes $ \le ->
     runKatipContextT le (mempty :: LogContexts) mempty $ do
       !env <- newEnv rc
-      lift $ runApp env $ do
-        res <- liftIO $ Warp.run (envEndpointPort env) $ Chat.app env
-        $(logTM) ErrorS
-          $ logStr
-          $ "Terminate program with result " <> (show res :: Text)
+      res <- lift $ runApp env $ liftIO $ Chat.app env $ \app ->
+        Warp.run (envEndpointPort env) app
+      $(logTM) ErrorS
+        $ logStr
+        $ "Terminate program with result " <> (show res :: Text)
 
 {-# START_FILE README.md #-}
 # {{name}}
@@ -884,7 +904,7 @@ builtins.fetchTarball {
     in
       {
         haskell-ide = import (
-          fetchTarball "https://github.com/tim2CF/ultimate-haskell-ide/tarball/605191e71ecc13b07471c8859b91a2d3e2267485"
+          fetchTarball "https://github.com/tim2CF/ultimate-haskell-ide/tarball/f27011bcacd287862089bd723a23e6539f9d5270"
         ) {inherit vimBackground vimColorScheme;};
         haskellPackages = super.haskell.packages.ghc865.extend(
           self': super': {
@@ -912,6 +932,7 @@ builtins.fetchTarball {
               stdenv = self.stdenv;
               fetchgit = self.fetchgit;
             };
+            typerep-map = doJailbreak super'.typerep-map;
             proto3-suite = dontCheck (doJailbreak super'.proto3-suite);
           }
         );
@@ -1044,23 +1065,29 @@ mkDerivation {
 }
 
 {-# START_FILE ./nix/overlay/concur-core.nix #-}
-{ mkDerivation, base, fetchgit, free, hpack, mtl
-, natural-transformation, stdenv, stm, transformers
+{ mkDerivation, base, exceptions, fetchgit, free, hpack, mtl
+, natural-transformation, resourcet, stdenv, tasty, tasty-hunit
+, transformers, unliftio
 }:
 mkDerivation {
   pname = "concur-core";
   version = "0.1.0.0";
   src = fetchgit {
     url = "https://github.com/tkachuk-labs/concur";
-    sha256 = "1gdp8n8p11gyyna8lazcljijfkl11sxmbwnh3kgg5j9bcxw2cb1f";
-    rev = "dc5347b35c79654d58fa95716f425ee7248504fb";
+    sha256 = "0xj2s57s6r8kh76yjpdsp9vm4g5vwg75fqc29lfw1z2igkb0igyz";
+    rev = "5d7366a25c0688b504ca263ee689b4f6618313d1";
     fetchSubmodules = true;
   };
   postUnpack = "sourceRoot+=/concur-core; echo source root reset to $sourceRoot";
   libraryHaskellDepends = [
-    base free mtl natural-transformation stm transformers
+    base exceptions free mtl natural-transformation resourcet
+    transformers unliftio
   ];
   libraryToolDepends = [ hpack ];
+  testHaskellDepends = [
+    base exceptions free mtl natural-transformation resourcet tasty
+    tasty-hunit transformers unliftio
+  ];
   prePatch = "hpack";
   homepage = "https://github.com/ajnsit/concur#readme";
   description = "A UI framework for Haskell. Core framework.";
@@ -1068,29 +1095,33 @@ mkDerivation {
 }
 
 {-# START_FILE ./nix/overlay/replica.nix #-}
-{ mkDerivation, aeson, base, bytestring, containers, Diff, fetchgit
-, file-embed, hpack, http-types, QuickCheck, quickcheck-instances
-, stdenv, stm, template-haskell, text, wai, wai-websockets
-, websockets
+{ mkDerivation, aeson, async, base, bytestring, chronos
+, co-log-core, containers, cryptonite, Diff, fetchgit, file-embed
+, hex-text, hpack, http-media, http-types, psqueues, QuickCheck
+, quickcheck-instances, resourcet, stdenv, stm, template-haskell
+, text, torsor, wai, wai-websockets, websockets
 }:
 mkDerivation {
   pname = "replica";
   version = "0.1.0.0";
   src = fetchgit {
     url = "https://github.com/tkachuk-labs/replica";
-    sha256 = "0yfcgbqfmgw8ax8lf0lc3p9gvgqshakjzmw20fyvq0dp5wf5a6aa";
-    rev = "c0046ff9b3be5e20e5306de743b83620cf59c6a9";
+    sha256 = "1hlfsdfwciyqjc9m1ph756090arjb3dggj9xc8r7anlzc1lsmfl8";
+    rev = "e4b0988f7a4053fb7edc73e6267b00bfbfb70178";
     fetchSubmodules = true;
   };
   libraryHaskellDepends = [
-    aeson base bytestring containers Diff file-embed http-types stm
-    template-haskell text wai wai-websockets websockets
+    aeson async base bytestring chronos co-log-core containers
+    cryptonite Diff file-embed hex-text http-media http-types psqueues
+    resourcet stm template-haskell text torsor wai wai-websockets
+    websockets
   ];
   libraryToolDepends = [ hpack ];
   testHaskellDepends = [
-    aeson base bytestring containers Diff file-embed http-types
-    QuickCheck quickcheck-instances stm template-haskell text wai
-    wai-websockets websockets
+    aeson async base bytestring chronos co-log-core containers
+    cryptonite Diff file-embed hex-text http-media http-types psqueues
+    QuickCheck quickcheck-instances resourcet stm template-haskell text
+    torsor wai wai-websockets websockets
   ];
   prePatch = "hpack";
   homepage = "https://github.com/https://github.com/pkamenarsky/replica#readme";
@@ -1099,29 +1130,32 @@ mkDerivation {
 }
 
 {-# START_FILE ./nix/overlay/concur-replica.nix #-}
-{ mkDerivation, aeson, base, bytestring, concur-core, containers
-, fetchgit, free, hpack, mtl, random, replica, stdenv, stm, text
-, transformers, wai, wai-websockets, warp, websockets
+{ mkDerivation, aeson, base, byteorder, bytestring, chronos, co-log
+, concur-core, containers, fetchgit, free, hpack, http-types, mtl
+, network, random, replica, stdenv, text, torsor, transformers, wai
+, wai-websockets, warp, websockets
 }:
 mkDerivation {
   pname = "concur-replica";
   version = "0.1.0.0";
   src = fetchgit {
     url = "https://github.com/tkachuk-labs/concur-replica";
-    sha256 = "1p156cx04sz0i0myv3d0kjjcp5y3s3c341jwsjdcxw65c1zzpz0v";
-    rev = "7d16bcc93114c62252e3e22c208dc2a819f02435";
+    sha256 = "058a8bx5kdf5pz39gvy4mmw5xg8jf8z85bjzbip68wqbngb1xy7b";
+    rev = "cdbf120bfbe2b74448985417261986a6c572b15e";
     fetchSubmodules = true;
   };
   isLibrary = true;
   isExecutable = true;
   libraryHaskellDepends = [
-    aeson base bytestring concur-core containers free replica stm text
-    transformers wai wai-websockets warp websockets
+    aeson base byteorder bytestring chronos co-log concur-core
+    containers free http-types network replica text torsor transformers
+    wai wai-websockets warp websockets
   ];
   libraryToolDepends = [ hpack ];
   executableHaskellDepends = [
-    aeson base bytestring concur-core containers free mtl random
-    replica stm text transformers wai wai-websockets warp websockets
+    aeson base byteorder bytestring chronos co-log concur-core
+    containers free http-types mtl network random replica text torsor
+    transformers wai wai-websockets warp websockets
   ];
   prePatch = "hpack";
   homepage = "https://github.com/pkamenarsky/concur-replica#readme";

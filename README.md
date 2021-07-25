@@ -47,7 +47,7 @@ chmod a+x ./nix/*.sh
 
 ./nix/shell.sh
 
-stack test
+stack test --fast
 
 vi .
 ```
