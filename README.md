@@ -25,6 +25,7 @@ templates:
     author-email: tkachuk.labs@gmail.com
     author-name: Ilja Tkachuk
     category: Data
+    copyright: "2021 Tkachuk Labs [https://tkachuklabs.gitlab.io]"
     github-username: tkachuk-labs
     organization: tkachuk-labs
 ```
